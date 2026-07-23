@@ -1,683 +1,593 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Offscreen — smart screen breaks for macOS</title>
-<meta name="description" content="Offscreen is a native macOS menu bar app that schedules smart screen breaks — and knows when not to interrupt. Free, local, zero permission prompts.">
+<meta name="description" content="Offscreen is a native macOS menu bar app that schedules smart screen breaks — and knows when not to interrupt. Free, local, open source, zero permission prompts.">
+<meta property="og:title" content="Offscreen — smart screen breaks for macOS">
+<meta property="og:description" content="Smart screen breaks that protect your vision — and know when not to interrupt. Free, local, open source.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://dayaki.github.io/offscreen/">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>🌙</text></svg>">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/regular/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/bold/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/fill/style.css">
+
 <style>
-  :root {
-    --bg0: #0a0612;
-    --bg1: #140c20;
-    --ink: #f7f2fa;
-    --ink2: #c3b5d1;
-    --ink3: #8d7da0;
-    --amber: #ffb45c;
-    --rose: #ff7d9c;
-    --violet: #b78cff;
-    --grad: linear-gradient(105deg, var(--amber), var(--rose) 55%, var(--violet));
-    --card: rgba(255, 255, 255, 0.05);
-    --border: rgba(255, 255, 255, 0.1);
-    --border-warm: rgba(255, 180, 92, 0.22);
-    --shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
-    --r: 20px;
-    --max: 1100px;
-    --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  @media (prefers-color-scheme: light) {
-    :root {
-      --bg0: #faf5ee;
-      --bg1: #f1e8e0;
-      --ink: #241633;
-      --ink2: #5b4a70;
-      --ink3: #8d7da0;
-      --amber: #e08b1f;
-      --rose: #e0447a;
-      --violet: #7a4fd6;
-      --card: rgba(255, 255, 255, 0.65);
-      --border: rgba(36, 22, 51, 0.1);
-      --border-warm: rgba(224, 139, 31, 0.3);
-      --shadow: 0 30px 90px rgba(60, 30, 90, 0.16);
-    }
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
-    background: var(--bg0); color: var(--ink); line-height: 1.6;
-    -webkit-font-smoothing: antialiased; overflow-x: hidden;
-  }
-  ::selection { background: color-mix(in oklab, var(--rose) 40%, transparent); }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+body { font-family: 'Inter', sans-serif; background-color: #000000; color: #ffffff; -webkit-font-smoothing: antialiased; }
+.premium-border { border: 1px solid rgba(255, 255, 255, 0.1); }
+.text-muted { color: #a1a1aa; }
+.bg-card { background-color: #0a0a0a; }
+.nav-glass { background-color: rgba(10, 10, 10, 0.8); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+html { scroll-behavior: smooth; }
+</style>
 
-  /* ---- aurora background ---- */
-  .aurora { position: fixed; inset: -20%; z-index: -2; filter: blur(70px); opacity: .55; }
-  .aurora i { position: absolute; border-radius: 50%; }
-  .aurora i:nth-child(1) { width: 46vw; height: 46vw; left: -8%; top: -12%;
-    background: radial-gradient(circle, color-mix(in oklab, var(--violet) 55%, transparent), transparent 65%);
-    animation: drift1 26s ease-in-out infinite alternate; }
-  .aurora i:nth-child(2) { width: 40vw; height: 40vw; right: -6%; top: 4%;
-    background: radial-gradient(circle, color-mix(in oklab, var(--amber) 45%, transparent), transparent 65%);
-    animation: drift2 32s ease-in-out infinite alternate; }
-  .aurora i:nth-child(3) { width: 52vw; height: 52vw; left: 24%; bottom: -26%;
-    background: radial-gradient(circle, color-mix(in oklab, var(--rose) 38%, transparent), transparent 65%);
-    animation: drift3 38s ease-in-out infinite alternate; }
-  @keyframes drift1 { to { transform: translate(9vw, 7vh) scale(1.15); } }
-  @keyframes drift2 { to { transform: translate(-7vw, 10vh) scale(0.9); } }
-  @keyframes drift3 { to { transform: translate(-9vw, -7vh) scale(1.1); } }
+<style type="text/css">
+*, ::before, ::after { --tw-border-spacing-x: 0; --tw-border-spacing-y: 0; --tw-translate-x: 0; --tw-translate-y: 0; --tw-rotate: 0; --tw-skew-x: 0; --tw-skew-y: 0; --tw-scale-x: 1; --tw-scale-y: 1; --tw-pan-x:  ; --tw-pan-y:  ; --tw-pinch-zoom:  ; --tw-scroll-snap-strictness: proximity; --tw-gradient-from-position:  ; --tw-gradient-via-position:  ; --tw-gradient-to-position:  ; --tw-ordinal:  ; --tw-slashed-zero:  ; --tw-numeric-figure:  ; --tw-numeric-spacing:  ; --tw-numeric-fraction:  ; --tw-ring-inset:  ; --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: rgb(59 130 246 / 0.5); --tw-ring-offset-shadow: 0 0 #0000; --tw-ring-shadow: 0 0 #0000; --tw-shadow: 0 0 #0000; --tw-shadow-colored: 0 0 #0000; --tw-blur:  ; --tw-brightness:  ; --tw-contrast:  ; --tw-grayscale:  ; --tw-hue-rotate:  ; --tw-invert:  ; --tw-saturate:  ; --tw-sepia:  ; --tw-drop-shadow:  ; --tw-backdrop-blur:  ; --tw-backdrop-brightness:  ; --tw-backdrop-contrast:  ; --tw-backdrop-grayscale:  ; --tw-backdrop-hue-rotate:  ; --tw-backdrop-invert:  ; --tw-backdrop-opacity:  ; --tw-backdrop-saturate:  ; --tw-backdrop-sepia:  ; --tw-contain-size:  ; --tw-contain-layout:  ; --tw-contain-paint:  ; --tw-contain-style:  ; }
+::backdrop { --tw-border-spacing-x: 0; --tw-border-spacing-y: 0; --tw-translate-x: 0; --tw-translate-y: 0; --tw-rotate: 0; --tw-skew-x: 0; --tw-skew-y: 0; --tw-scale-x: 1; --tw-scale-y: 1; --tw-pan-x:  ; --tw-pan-y:  ; --tw-pinch-zoom:  ; --tw-scroll-snap-strictness: proximity; --tw-gradient-from-position:  ; --tw-gradient-via-position:  ; --tw-gradient-to-position:  ; --tw-ordinal:  ; --tw-slashed-zero:  ; --tw-numeric-figure:  ; --tw-numeric-spacing:  ; --tw-numeric-fraction:  ; --tw-ring-inset:  ; --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: rgb(59 130 246 / 0.5); --tw-ring-offset-shadow: 0 0 #0000; --tw-ring-shadow: 0 0 #0000; --tw-shadow: 0 0 #0000; --tw-shadow-colored: 0 0 #0000; --tw-blur:  ; --tw-brightness:  ; --tw-contrast:  ; --tw-grayscale:  ; --tw-hue-rotate:  ; --tw-invert:  ; --tw-saturate:  ; --tw-sepia:  ; --tw-drop-shadow:  ; --tw-backdrop-blur:  ; --tw-backdrop-brightness:  ; --tw-backdrop-contrast:  ; --tw-backdrop-grayscale:  ; --tw-backdrop-hue-rotate:  ; --tw-backdrop-invert:  ; --tw-backdrop-opacity:  ; --tw-backdrop-saturate:  ; --tw-backdrop-sepia:  ; --tw-contain-size:  ; --tw-contain-layout:  ; --tw-contain-paint:  ; --tw-contain-style:  ; }
 
-  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
-
-  /* ---- nav ---- */
-  nav { position: sticky; top: 0; z-index: 50;
-    backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4);
-    background: color-mix(in oklab, var(--bg0) 70%, transparent);
-    border-bottom: 1px solid var(--border); }
-  .nav-inner { display: flex; align-items: center; height: 62px; gap: 28px; }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
-  .logo { width: 26px; height: 26px; color: var(--amber); animation: blink 6s infinite; transform-origin: center; }
-  @keyframes blink { 0%, 94%, 100% { transform: scaleY(1); } 96.5% { transform: scaleY(0.08); } }
-  .nav-links { display: flex; gap: 24px; margin-left: auto; }
-  .nav-links a { color: var(--ink2); text-decoration: none; font-size: 14px; position: relative; }
-  .nav-links a::after { content: ""; position: absolute; left: 0; bottom: -4px; height: 2px; width: 0;
-    background: var(--grad); border-radius: 2px; transition: width .25s var(--ease); }
-  .nav-links a:hover { color: var(--ink); }
-  .nav-links a:hover::after { width: 100%; }
-
-  .btn { position: relative; display: inline-flex; align-items: center; gap: 8px;
-    padding: 11px 22px; border-radius: 999px; font-size: 14.5px; font-weight: 700;
-    text-decoration: none; color: #1c0f28; background: var(--grad); background-size: 160% 100%;
-    transition: background-position .4s var(--ease), transform .2s var(--ease), box-shadow .3s var(--ease); }
-  .btn:hover { background-position: 90% 0; transform: translateY(-2px);
-    box-shadow: 0 12px 36px color-mix(in oklab, var(--rose) 45%, transparent); }
-  .btn .arr { transition: transform .25s var(--ease); }
-  .btn:hover .arr { transform: translateX(4px); }
-  .btn.ghost { background: var(--card); color: var(--ink); border: 1px solid var(--border); }
-  .btn.ghost:hover { border-color: var(--border-warm); box-shadow: none; }
-
-  /* ---- hero ---- */
-  header.hero { padding: 96px 0 70px; position: relative; }
-  .hero-grid { display: grid; grid-template-columns: 1.02fr 0.98fr; gap: 56px; align-items: center; }
-  .enter { opacity: 0; transform: translateY(26px); animation: enter .9s var(--ease) forwards; }
-  .enter.d1 { animation-delay: .08s } .enter.d2 { animation-delay: .18s }
-  .enter.d3 { animation-delay: .3s } .enter.d4 { animation-delay: .42s } .enter.d5 { animation-delay: .56s }
-  @keyframes enter { to { opacity: 1; transform: none; } }
-
-  .eyebrow { display: inline-flex; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 700;
-    letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); margin-bottom: 20px; }
-  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber);
-    box-shadow: 0 0 0 0 color-mix(in oklab, var(--amber) 60%, transparent); animation: pulse 2.4s infinite; }
-  @keyframes pulse { 70% { box-shadow: 0 0 0 9px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
-
-  h1 { font-size: clamp(42px, 6vw, 72px); line-height: 1.02; letter-spacing: -0.035em; font-weight: 800; }
-  h1 .shine { background: var(--grad); background-size: 200% 100%;
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    animation: shimmer 7s ease-in-out infinite; }
-  @keyframes shimmer { 0%,100% { background-position: 0% 0; } 50% { background-position: 100% 0; } }
-
-  .lede { font-size: 18.5px; color: var(--ink2); margin: 24px 0 32px; max-width: 44ch; }
-  .cta-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
-  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 32px; }
-  .chip { font-size: 12.5px; color: var(--ink2); border: 1px solid var(--border); border-radius: 999px;
-    padding: 6px 13px; background: var(--card); transition: border-color .2s, color .2s; }
-  .chip:hover { border-color: var(--border-warm); color: var(--ink); }
-
-  /* ---- hero demo: the break cycle, on loop ---- */
-  .demo { position: relative; }
-  .screen { position: relative; border-radius: 24px; overflow: hidden;
-    border: 1px solid var(--border); box-shadow: var(--shadow); aspect-ratio: 15 / 11;
-    background:
-      radial-gradient(120% 90% at 75% 0%, #3d2a55 0%, transparent 55%),
-      radial-gradient(100% 80% at 10% 100%, #4d2438 0%, transparent 55%),
-      linear-gradient(180deg, #170d24, #0d0716); }
-  /* fake desktop window */
-  .fakewin { position: absolute; left: 10%; right: 14%; top: 17%; bottom: 22%;
-    border-radius: 12px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.09); }
-  .fakewin::before { content: ""; position: absolute; left: 12px; top: 11px; width: 8px; height: 8px;
-    border-radius: 50%; background: #ff5f57; box-shadow: 14px 0 0 #febc2e, 28px 0 0 #28c840; }
-  .fakewin i { position: absolute; left: 14px; height: 7px; border-radius: 4px; background: rgba(255,255,255,.1); }
-  .fakewin i:nth-child(1) { top: 36px; width: 62%; } .fakewin i:nth-child(2) { top: 52px; width: 44%; }
-  .fakewin i:nth-child(3) { top: 68px; width: 71%; } .fakewin i:nth-child(4) { top: 84px; width: 35%; }
-
-  .demo-menubar { position: absolute; top: 10px; right: 12px; display: flex; align-items: center; gap: 7px;
-    border-radius: 999px; padding: 6px 13px; font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums;
-    color: #fff; background: rgba(20,12,32,.75); border: 1px solid rgba(255,255,255,.14);
-    backdrop-filter: blur(8px); }
-  .demo-menubar .logo { width: 15px; height: 15px; }
-
-  .demo-headsup { position: absolute; top: 44px; right: 12px; width: 252px;
-    border-radius: 17px; padding: 14px;
-    background: linear-gradient(180deg, #2a1a40, #160d26);
-    border: 1px solid rgba(255,255,255,.12); backdrop-filter: blur(10px);
-    opacity: 0; transform: translateX(24px) scale(.97);
-    transition: opacity .5s var(--ease), transform .5s var(--ease); }
-  .demo.notice .demo-headsup { opacity: 1; transform: none; }
-  .demo-headsup .top { display: flex; align-items: center; gap: 10px; }
-  .demo-headsup .clock { width: 34px; height: 34px; border-radius: 50%; flex: none; position: relative;
-    background: linear-gradient(135deg, var(--rose), var(--amber)); }
-  .demo-headsup .clock::before { content: ""; position: absolute; inset: 3px; border-radius: 50%;
-    background: repeating-conic-gradient(rgba(255,255,255,.55) 0 1.6deg, transparent 1.6deg 30deg);
-    -webkit-mask: radial-gradient(circle, transparent 62%, #000 63% 72%, transparent 73%);
-    mask: radial-gradient(circle, transparent 62%, #000 63% 72%, transparent 73%); }
-  .demo-headsup .clock::after { content: ""; position: absolute; left: 50%; bottom: 50%;
-    width: 2.5px; height: 11px; border-radius: 2px; background: #fff;
-    transform-origin: bottom center; transform: translateX(-50%) rotate(-56deg);
-    animation: hand 8s linear infinite; }
-  @keyframes hand { to { transform: translateX(-50%) rotate(-416deg); } }
-  .demo-headsup .time { color: #fff; font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
-  .demo-headsup .sub { color: rgba(255,255,255,.6); font-size: 10.5px; }
-  .demo-headsup .row { display: flex; gap: 5px; margin-top: 11px; }
-  .demo-headsup .b { font-size: 10.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px;
-    background: rgba(255,255,255,.14); color: #fff; }
-  .demo-headsup .b.alt { background: transparent; color: rgba(255,255,255,.8);
-    border: 1px solid rgba(255,255,255,.22); padding: 4px 9px; }
-
-  .demo-overlay { position: absolute; inset: 0; display: grid; place-items: center;
-    background: #0a0612; overflow: hidden;
-    box-shadow: inset 0 0 90px rgba(0,0,0,.55);
-    opacity: 0; transform: scale(1.04); pointer-events: none;
-    transition: opacity .7s var(--ease), transform .7s var(--ease); }
-  /* aurora field — drifting violet/rose/amber blooms, like the app's shader */
-  .demo-overlay::before { content: ""; position: absolute; inset: -35%;
-    background:
-      radial-gradient(38% 45% at 26% 32%, rgba(183,140,255,.36), transparent 70%),
-      radial-gradient(42% 48% at 74% 64%, rgba(255,125,156,.30), transparent 70%),
-      radial-gradient(36% 44% at 58% 18%, rgba(255,180,92,.24), transparent 70%),
-      radial-gradient(44% 52% at 40% 82%, rgba(92,41,87,.45), transparent 72%);
-    filter: blur(18px);
-    animation: aurora-drift 16s ease-in-out infinite alternate; }
-  @keyframes aurora-drift {
-    0%   { transform: translate(-3%, -2%) rotate(-2deg) scale(1); }
-    50%  { transform: translate(3%, 2%) rotate(2deg) scale(1.07); }
-    100% { transform: translate(-2%, 3%) rotate(-1deg) scale(1.03); } }
-  /* film grain */
-  .demo-overlay::after { content: ""; position: absolute; inset: 0;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-    background-size: 180px 180px;
-    opacity: .38; mix-blend-mode: overlay; }
-  .demo.break .demo-overlay { opacity: 1; transform: none; }
-  .demo-overlay .inner { text-align: center; position: relative; z-index: 1; }
-  .demo-overlay .kicker { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: rgba(255,255,255,.5); }
-  .demo-overlay .prompt { color: #fff; font-size: 19px; font-weight: 700; margin: 8px 0 18px; letter-spacing: -0.01em; }
-  .ring { position: relative; width: 130px; height: 130px; margin: 0 auto; }
-  .ring svg { transform: rotate(-90deg); display: block; }
-  .ring .track { stroke: rgba(255,255,255,.14); }
-  .ring .arc { stroke: url(#ringGrad); stroke-linecap: round; stroke-dasharray: 364; stroke-dashoffset: 0; }
-  .demo.break .ring .arc { animation: drain 6s linear forwards; }
-  @keyframes drain { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 364; } }
-  .ring .time { position: absolute; inset: 0; display: grid; place-items: center;
-    color: #fff; font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; }
-  .demo-caption { display: flex; justify-content: center; gap: 8px; margin-top: 18px; }
-  .demo-caption span { font-size: 12px; color: var(--ink3); padding: 5px 12px; border-radius: 999px;
-    border: 1px solid var(--border); transition: all .3s var(--ease); }
-  .demo-caption span.on { color: var(--ink); border-color: var(--border-warm);
-    background: color-mix(in oklab, var(--amber) 10%, transparent); }
-
-  /* ---- sections ---- */
-  section { padding: 84px 0; position: relative; }
-  .sec-head { max-width: 64ch; margin-bottom: 46px; }
-  .sec-head h2 { font-size: clamp(28px, 3.6vw, 42px); letter-spacing: -0.025em; line-height: 1.12; font-weight: 800; }
-  .sec-head h2 em { font-style: normal; background: var(--grad);
-    -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .sec-head p { color: var(--ink2); margin-top: 14px; font-size: 17px; }
-
-  .reveal { opacity: 0; transform: translateY(28px); transition: opacity .8s var(--ease), transform .8s var(--ease); }
-  .reveal.in { opacity: 1; transform: none; }
-
-  /* steps */
-  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: step; }
-  .step { position: relative; background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--r); padding: 30px 26px; overflow: hidden; }
-  .step::after { content: ""; position: absolute; inset: 0; border-radius: var(--r);
-    background: radial-gradient(300px 160px at 20% 0%, color-mix(in oklab, var(--amber) 9%, transparent), transparent 70%);
-    opacity: 0; transition: opacity .4s; }
-  .step:hover::after { opacity: 1; }
-  .step .n { counter-increment: step; font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -0.04em;
-    background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; opacity: .9; }
-  .step .n::before { content: "0" counter(step); }
-  .step h3 { font-size: 18px; margin: 14px 0 8px; letter-spacing: -0.01em; }
-  .step p { font-size: 14.5px; color: var(--ink2); position: relative; }
-
-  /* features */
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-  .card { position: relative; background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--r); padding: 26px; overflow: hidden;
-    transition: transform .3s var(--ease), border-color .3s; }
-  .card:hover { transform: translateY(-5px); border-color: var(--border-warm); }
-  .card .glow { position: absolute; inset: 0; opacity: 0; transition: opacity .4s;
-    background: radial-gradient(340px 200px at 30% -10%, color-mix(in oklab, var(--rose) 10%, transparent), transparent 70%); }
-  .card:hover .glow { opacity: 1; }
-  .card .ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
-    font-size: 19px; margin-bottom: 16px; position: relative;
-    background: linear-gradient(135deg, color-mix(in oklab, var(--amber) 20%, transparent), color-mix(in oklab, var(--violet) 22%, transparent));
-    border: 1px solid var(--border); transition: transform .3s var(--ease); }
-  .card:hover .ico { transform: scale(1.1) rotate(-4deg); }
-  .card h3 { font-size: 16.5px; margin-bottom: 7px; letter-spacing: -0.01em; position: relative; }
-  .card p { font-size: 14px; color: var(--ink2); position: relative; }
-
-  /* smart pause marquee band */
-  .pause-band { border-radius: 28px; border: 1px solid var(--border); overflow: hidden;
-    background:
-      radial-gradient(700px 340px at 0% 0%, color-mix(in oklab, var(--violet) 14%, transparent), transparent 65%),
-      radial-gradient(600px 300px at 100% 100%, color-mix(in oklab, var(--amber) 10%, transparent), transparent 65%),
-      var(--bg1);
-    padding: 56px 0 40px; }
-  .pause-band .sec-head { padding: 0 48px; }
-  .marquee { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
-    mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
-  .marquee + .marquee { margin-top: 12px; }
-  .mtrack { display: flex; gap: 12px; width: max-content; animation: scroll 34s linear infinite; }
-  .marquee.rev .mtrack { animation-direction: reverse; }
-  .marquee:hover .mtrack { animation-play-state: paused; }
-  @keyframes scroll { to { transform: translateX(-50%); } }
-  .signal { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap;
-    border: 1px solid var(--border); background: var(--card); border-radius: 999px;
-    padding: 10px 18px; font-size: 14px; color: var(--ink2); }
-  .signal b { color: var(--ink); font-weight: 600; }
-
-  /* stats */
-  .stats-grid { display: grid; grid-template-columns: 0.92fr 1.08fr; gap: 48px; align-items: center; }
-  .score-card { border-radius: 24px; border: 1px solid var(--border); background: var(--bg1);
-    padding: 32px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
-  .score-card::before { content: ""; position: absolute; inset: 0;
-    background: radial-gradient(420px 220px at 85% -10%, color-mix(in oklab, var(--violet) 14%, transparent), transparent 70%); }
-  .score-label { font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink3); }
-  .score-num { font-size: 58px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.05;
-    background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .score-sub { color: var(--ink2); font-size: 13.5px; margin-top: 2px; }
-  .bars { display: flex; gap: 12px; height: 120px; margin-top: 26px; position: relative; }
-  .bar-wrap { flex: 1; display: grid; grid-template-rows: 1fr auto; gap: 9px; }
-  .bar-cell { display: flex; align-items: flex-end; }
-  .bar { width: 100%; height: 0; border-radius: 7px 7px 3px 3px;
-    background: linear-gradient(180deg, var(--rose), color-mix(in oklab, var(--violet) 70%, var(--bg1)));
-    transition: height 1s var(--ease); }
-  .in .bar { height: var(--h); }
-  .bar-wrap:nth-child(2) .bar { transition-delay: .07s } .bar-wrap:nth-child(3) .bar { transition-delay: .14s }
-  .bar-wrap:nth-child(4) .bar { transition-delay: .21s } .bar-wrap:nth-child(5) .bar { transition-delay: .28s }
-  .bar-wrap:nth-child(6) .bar { transition-delay: .35s } .bar-wrap:nth-child(7) .bar { transition-delay: .42s }
-  .bar-wrap span { text-align: center; font-size: 11px; color: var(--ink3); }
-
-  /* get */
-  .get { border-radius: 28px; border: 1px solid var(--border); text-align: center; overflow: hidden; position: relative;
-    background:
-      radial-gradient(720px 380px at 50% 130%, color-mix(in oklab, var(--rose) 16%, transparent), transparent 70%),
-      var(--bg1);
-    padding: 64px 44px; }
-  .get h2 { font-size: clamp(28px, 3.6vw, 42px); letter-spacing: -0.025em; font-weight: 800; }
-  .get p { color: var(--ink2); max-width: 54ch; margin: 16px auto 30px; }
-  .term { max-width: 580px; margin: 0 auto 28px; text-align: left;
-    background: #0c0714; border: 1px solid rgba(255,255,255,.12); border-radius: 14px;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13.5px;
-    padding: 20px 22px; color: #e4d7f2; overflow-x: auto; position: relative; }
-  .term::before { content: ""; position: absolute; left: 16px; top: 14px; width: 9px; height: 9px;
-    border-radius: 50%; background: #ff5f57; box-shadow: 16px 0 0 #febc2e, 32px 0 0 #28c840; }
-  .term > div:first-of-type { margin-top: 18px; }
-  .term .dim { color: #6d5f85; }
-  .term .ok { color: var(--amber); }
-  .req { font-size: 13px; color: var(--ink3); margin-top: 14px; }
-
-  /* faq */
-  details { border-bottom: 1px solid var(--border); padding: 22px 4px; }
-  details summary { cursor: pointer; font-weight: 700; font-size: 16.5px; list-style: none;
-    display: flex; justify-content: space-between; align-items: center; gap: 16px; letter-spacing: -0.01em; }
-  details summary::-webkit-details-marker { display: none; }
-  details summary::after { content: "+"; font-size: 22px; font-weight: 400; color: var(--ink3);
-    transition: transform .3s var(--ease), color .3s; }
-  details[open] summary::after { transform: rotate(45deg); color: var(--rose); }
-  details p { color: var(--ink2); font-size: 14.5px; margin-top: 12px; max-width: 68ch; }
-  details a { color: var(--amber); }
-
-  footer { padding: 48px 0 64px; color: var(--ink3); font-size: 13px; }
-  .foot { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; align-items: center;
-    border-top: 1px solid var(--border); padding-top: 32px; }
-
-  @media (max-width: 920px) {
-    .hero-grid { grid-template-columns: 1fr; gap: 60px; }
-    .steps, .grid { grid-template-columns: 1fr 1fr; }
-    .stats-grid { grid-template-columns: 1fr; gap: 36px; }
-  }
-  @media (max-width: 600px) {
-    .steps, .grid { grid-template-columns: 1fr; }
-    .nav-links { display: none; }
-    .pause-band .sec-head { padding: 0 26px; }
-    .get { padding: 44px 24px; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation: none !important; transition: none !important; }
-    html { scroll-behavior: auto; }
-    .reveal, .enter { opacity: 1 !important; transform: none !important; }
-    .demo-headsup, .demo-overlay { opacity: 1; transform: none; }
-    .bar { height: var(--h); }
-  }
+*, ::before, ::after { box-sizing: border-box; border-width: 0; border-style: solid; border-color: #e5e7eb; }
+::before, ::after { --tw-content: ''; }
+html, :host { line-height: 1.5; -webkit-text-size-adjust: 100%; -moz-tab-size: 4; tab-size: 4; font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; font-feature-settings: normal; font-variation-settings: normal; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; line-height: inherit; }
+hr { height: 0; color: inherit; border-top-width: 1px; }
+abbr:where([title]) { text-decoration: underline dotted; }
+h1, h2, h3, h4, h5, h6 { font-size: inherit; font-weight: inherit; }
+a { color: inherit; text-decoration: inherit; }
+b, strong { font-weight: bolder; }
+code, kbd, samp, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-feature-settings: normal; font-variation-settings: normal; font-size: 1em; }
+small { font-size: 80%; }
+sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline; }
+sub { bottom: -0.25em; }
+sup { top: -0.5em; }
+table { text-indent: 0; border-color: inherit; border-collapse: collapse; }
+button, input, optgroup, select, textarea { font-family: inherit; font-feature-settings: inherit; font-variation-settings: inherit; font-size: 100%; font-weight: inherit; line-height: inherit; letter-spacing: inherit; color: inherit; margin: 0; padding: 0; }
+button, select { text-transform: none; }
+button, input:where([type='button']), input:where([type='reset']), input:where([type='submit']) { -webkit-appearance: button; background-color: transparent; background-image: none; }
+:-moz-focusring { outline: auto; }
+:-moz-ui-invalid { box-shadow: none; }
+progress { vertical-align: baseline; }
+::-webkit-inner-spin-button, ::-webkit-outer-spin-button { height: auto; }
+[type='search'] { -webkit-appearance: textfield; outline-offset: -2px; }
+::-webkit-search-decoration { -webkit-appearance: none; }
+::-webkit-file-upload-button { -webkit-appearance: button; font: inherit; }
+summary { display: list-item; }
+blockquote, dl, dd, h1, h2, h3, h4, h5, h6, hr, figure, p, pre { margin: 0; }
+fieldset { margin: 0; padding: 0; }
+legend { padding: 0; }
+ol, ul, menu { list-style: none; margin: 0; padding: 0; }
+dialog { padding: 0; }
+textarea { resize: vertical; }
+input::placeholder, textarea::placeholder { opacity: 1; color: #9ca3af; }
+button, [role="button"] { cursor: pointer; }
+:disabled { cursor: default; }
+img, svg, video, canvas, audio, iframe, embed, object { display: block; vertical-align: middle; }
+img, video { max-width: 100%; height: auto; }
+[hidden]:where(:not([hidden="until-found"])) { display: none; }
+.fixed { position: fixed; }
+.absolute { position: absolute; }
+.relative { position: relative; }
+.inset-0 { inset: 0px; }
+.left-1\/2 { left: 50%; }
+.top-8 { top: 2rem; }
+.z-50 { z-index: 50; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.mb-1 { margin-bottom: 0.25rem; }
+.mb-10 { margin-bottom: 2.5rem; }
+.mb-12 { margin-bottom: 3rem; }
+.mb-16 { margin-bottom: 4rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-20 { margin-bottom: 5rem; }
+.mb-3 { margin-bottom: 0.75rem; }
+.mb-32 { margin-bottom: 8rem; }
+.mb-4 { margin-bottom: 1rem; }
+.mb-40 { margin-bottom: 10rem; }
+.mb-6 { margin-bottom: 1.5rem; }
+.mb-8 { margin-bottom: 2rem; }
+.mt-4 { margin-top: 1rem; }
+.inline-block { display: inline-block; }
+.flex { display: flex; }
+.inline-flex { display: inline-flex; }
+.grid { display: grid; }
+.hidden { display: none; }
+.aspect-\[16\/9\] { aspect-ratio: 16/9; }
+.aspect-square { aspect-ratio: 1 / 1; }
+.h-1 { height: 0.25rem; }
+.h-1\.5 { height: 0.375rem; }
+.h-10 { height: 2.5rem; }
+.h-2 { height: 0.5rem; }
+.h-3 { height: 0.75rem; }
+.h-3\/4 { height: 75%; }
+.h-32 { height: 8rem; }
+.h-64 { height: 16rem; }
+.h-full { height: 100%; }
+.min-h-screen { min-height: 100vh; }
+.w-1\.5 { width: 0.375rem; }
+.w-10 { width: 2.5rem; }
+.w-20 { width: 5rem; }
+.w-24 { width: 6rem; }
+.w-3 { width: 0.75rem; }
+.w-3\/4 { width: 75%; }
+.w-32 { width: 8rem; }
+.w-64 { width: 16rem; }
+.w-\[84\%\] { width: 84%; }
+.w-full { width: 100%; }
+.max-w-2xl { max-width: 42rem; }
+.max-w-3xl { max-width: 48rem; }
+.max-w-4xl { max-width: 56rem; }
+.max-w-5xl { max-width: 64rem; }
+.max-w-6xl { max-width: 72rem; }
+.max-w-lg { max-width: 32rem; }
+.max-w-xl { max-width: 36rem; }
+.flex-1 { flex: 1 1 0%; }
+.-translate-x-1\/2 { --tw-translate-x: -50%; transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y)); }
+.cursor-copy { cursor: copy; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: 0.25rem; }
+.gap-1\.5 { gap: 0.375rem; }
+.gap-12 { gap: 3rem; }
+.gap-16 { gap: 4rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+.gap-8 { gap: 2rem; }
+.space-y-3 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.75rem * var(--tw-space-y-reverse)); }
+.space-y-4 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(1rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(1rem * var(--tw-space-y-reverse)); }
+.space-y-6 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(1.5rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(1.5rem * var(--tw-space-y-reverse)); }
+.space-y-8 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(2rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(2rem * var(--tw-space-y-reverse)); }
+.overflow-hidden { overflow: hidden; }
+.rounded { border-radius: 0.25rem; }
+.rounded-2xl { border-radius: 1rem; }
+.rounded-3xl { border-radius: 1.5rem; }
+.rounded-\[2\.5rem\] { border-radius: 2.5rem; }
+.rounded-\[3\.5rem\] { border-radius: 3.5rem; }
+.rounded-\[3rem\] { border-radius: 3rem; }
+.rounded-full { border-radius: 9999px; }
+.rounded-lg { border-radius: 0.5rem; }
+.rounded-xl { border-radius: 0.75rem; }
+.border { border-width: 1px; }
+.border-4 { border-width: 4px; }
+.border-b { border-bottom-width: 1px; }
+.border-t { border-top-width: 1px; }
+.border-zinc-200 { --tw-border-opacity: 1; border-color: rgb(228 228 231 / var(--tw-border-opacity, 1)); }
+.border-zinc-800 { --tw-border-opacity: 1; border-color: rgb(39 39 42 / var(--tw-border-opacity, 1)); }
+.border-zinc-900 { --tw-border-opacity: 1; border-color: rgb(24 24 27 / var(--tw-border-opacity, 1)); }
+.bg-\[\#111111\] { --tw-bg-opacity: 1; background-color: rgb(17 17 17 / var(--tw-bg-opacity, 1)); }
+.bg-black { --tw-bg-opacity: 1; background-color: rgb(0 0 0 / var(--tw-bg-opacity, 1)); }
+.bg-white { --tw-bg-opacity: 1; background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1)); }
+.bg-white\/5 { background-color: rgb(255 255 255 / 0.05); }
+.bg-zinc-100 { --tw-bg-opacity: 1; background-color: rgb(244 244 245 / var(--tw-bg-opacity, 1)); }
+.bg-zinc-600 { --tw-bg-opacity: 1; background-color: rgb(82 82 91 / var(--tw-bg-opacity, 1)); }
+.bg-zinc-700 { --tw-bg-opacity: 1; background-color: rgb(63 63 70 / var(--tw-bg-opacity, 1)); }
+.bg-zinc-800 { --tw-bg-opacity: 1; background-color: rgb(39 39 42 / var(--tw-bg-opacity, 1)); }
+.bg-zinc-900 { --tw-bg-opacity: 1; background-color: rgb(24 24 27 / var(--tw-bg-opacity, 1)); }
+.bg-zinc-900\/50 { background-color: rgb(24 24 27 / 0.5); }
+.p-16 { padding: 4rem; }
+.p-4 { padding: 1rem; }
+.p-8 { padding: 2rem; }
+.px-10 { padding-left: 2.5rem; padding-right: 2.5rem; }
+.px-12 { padding-left: 3rem; padding-right: 3rem; }
+.px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+.py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.py-12 { padding-top: 3rem; padding-bottom: 3rem; }
+.py-24 { padding-top: 6rem; padding-bottom: 6rem; }
+.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+.py-5 { padding-top: 1.25rem; padding-bottom: 1.25rem; }
+.pb-20 { padding-bottom: 5rem; }
+.pb-8 { padding-bottom: 2rem; }
+.pt-44 { padding-top: 11rem; }
+.text-left { text-align: left; }
+.text-center { text-align: center; }
+.font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
+.text-4xl { font-size: 2.25rem; line-height: 2.5rem; }
+.text-5xl { font-size: 3rem; line-height: 1; }
+.text-6xl { font-size: 3.75rem; line-height: 1; }
+.text-8xl { font-size: 6rem; line-height: 1; }
+.text-\[10px\] { font-size: 10px; }
+.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+.font-bold { font-weight: 700; }
+.font-light { font-weight: 300; }
+.font-medium { font-weight: 500; }
+.font-normal { font-weight: 400; }
+.font-semibold { font-weight: 600; }
+.uppercase { text-transform: uppercase; }
+.italic { font-style: italic; }
+.leading-\[1\.1\] { line-height: 1.1; }
+.leading-relaxed { line-height: 1.625; }
+.leading-tight { line-height: 1.25; }
+.tracking-tight { letter-spacing: -0.025em; }
+.tracking-tighter { letter-spacing: -0.05em; }
+.tracking-widest { letter-spacing: 0.1em; }
+.text-black { --tw-text-opacity: 1; color: rgb(0 0 0 / var(--tw-text-opacity, 1)); }
+.text-white { --tw-text-opacity: 1; color: rgb(255 255 255 / var(--tw-text-opacity, 1)); }
+.text-zinc-300 { --tw-text-opacity: 1; color: rgb(212 212 216 / var(--tw-text-opacity, 1)); }
+.text-zinc-400 { --tw-text-opacity: 1; color: rgb(161 161 170 / var(--tw-text-opacity, 1)); }
+.text-zinc-500 { --tw-text-opacity: 1; color: rgb(113 113 122 / var(--tw-text-opacity, 1)); }
+.text-zinc-600 { --tw-text-opacity: 1; color: rgb(82 82 91 / var(--tw-text-opacity, 1)); }
+.text-zinc-900 { --tw-text-opacity: 1; color: rgb(24 24 27 / var(--tw-text-opacity, 1)); }
+.antialiased { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+.opacity-20 { opacity: 0.2; }
+.opacity-30 { opacity: 0.3; }
+.opacity-50 { opacity: 0.5; }
+.opacity-90 { opacity: 0.9; }
+.shadow-2xl { --tw-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25); --tw-shadow-colored: 0 25px 50px -12px var(--tw-shadow-color); box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow); }
+.blur { --tw-blur: blur(8px); filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow); }
+.blur-3xl { --tw-blur: blur(64px); filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow); }
+.backdrop-filter { -webkit-backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia); backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia); }
+.transition-colors { transition-property: color, background-color, border-color, text-decoration-color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.hover\:bg-zinc-200:hover { --tw-bg-opacity: 1; background-color: rgb(228 228 231 / var(--tw-bg-opacity, 1)); }
+.hover\:bg-zinc-900:hover { --tw-bg-opacity: 1; background-color: rgb(24 24 27 / var(--tw-bg-opacity, 1)); }
+.hover\:text-white:hover { --tw-text-opacity: 1; color: rgb(255 255 255 / var(--tw-text-opacity, 1)); }
+@media (min-width: 768px) {
+  .md\:flex { display: flex; }
+  .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .md\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .md\:flex-row { flex-direction: row; }
+  .md\:text-left { text-align: left; }
+  .md\:text-7xl { font-size: 4.5rem; line-height: 1; }
+  .md\:text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+}
+* { -ms-overflow-style: none !important; scrollbar-width: none !important; }
+*::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
 </style>
 </head>
-<body>
-<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+<body class="w-full min-h-screen">
 
-<svg width="0" height="0" aria-hidden="true">
-  <defs>
-    <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#ffb45c"/><stop offset="55%" stop-color="#ff7d9c"/><stop offset="100%" stop-color="#b78cff"/>
-    </linearGradient>
-    <symbol id="eyes" viewBox="0 0 24 24">
-      <g fill="none" stroke="currentColor" stroke-width="1.8">
-        <ellipse cx="7.5" cy="12" rx="4.2" ry="5.4"/>
-        <ellipse cx="16.5" cy="12" rx="4.2" ry="5.4"/>
-        <circle cx="8.6" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-        <circle cx="17.6" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-      </g>
-    </symbol>
-  </defs>
-</svg>
-
-<nav>
-  <div class="wrap nav-inner">
-    <span class="brand"><svg class="logo"><use href="#eyes"/></svg> Offscreen</span>
-    <div class="nav-links">
-      <a href="#how">How it works</a>
-      <a href="#features">Features</a>
-      <a href="#smartpause">Smart Pause</a>
-      <a href="#stats">Stats</a>
-      <a href="#faq">FAQ</a>
+<!-- Nav -->
+<nav class="fixed top-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4">
+  <div class="nav-glass premium-border rounded-full py-3 px-6 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <i class="ph-fill ph-eye-closed text-2xl text-white"></i>
+      <span class="font-medium tracking-tight">Offscreen</span>
     </div>
-    <a class="btn" href="#get" style="margin-left:16px">Get Offscreen <span class="arr">→</span></a>
+    <div class="hidden md:flex items-center gap-6 text-sm font-light">
+      <a href="#how-it-works" class="hover:text-white text-muted transition-colors">How it works</a>
+      <a href="#features" class="hover:text-white text-muted transition-colors">Features</a>
+      <a href="#stats" class="hover:text-white text-muted transition-colors">Stats</a>
+      <a href="#faq" class="hover:text-white text-muted transition-colors">FAQ</a>
+    </div>
+    <a href="#download" class="flex items-center gap-2 bg-white text-black text-xs font-semibold px-4 py-1.5 rounded-full hover:bg-zinc-200 transition-colors">
+      <i class="ph-bold ph-apple-logo"></i>
+      Download
+    </a>
   </div>
 </nav>
 
-<header class="hero">
-  <div class="wrap hero-grid">
-    <div>
-      <span class="eyebrow enter d1"><span class="dot"></span> Native · macOS 15+ · Free forever</span>
-      <h1 class="enter d2">Look up.<br>Your eyes will<br><span class="shine">thank you.</span></h1>
-      <p class="lede enter d3">Offscreen lives in your menu bar and schedules smart screen breaks — and it knows when <em>not</em> to interrupt. In a meeting? Mid-game? Deep in flow? It waits, then catches you between moments.</p>
-      <div class="cta-row enter d4">
-        <a class="btn" href="#get">Get Offscreen <span class="arr">→</span></a>
-        <a class="btn ghost" href="#how">Watch a cycle</a>
+<!-- Hero -->
+<section class="relative pt-44 pb-20 px-6 flex flex-col items-center text-center max-w-5xl mx-auto">
+  <div class="inline-flex items-center gap-2 bg-zinc-900 premium-border rounded-full px-4 py-1.5 mb-12 text-xs">
+    <span class="bg-zinc-700 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest">v1.0</span>
+    <span class="text-zinc-400">Offscreen is here — smart screen breaks for macOS</span>
+    <i class="ph ph-arrow-right text-zinc-500"></i>
+  </div>
+
+  <div class="w-32 h-32 bg-zinc-900 premium-border rounded-[2.5rem] flex items-center justify-center mb-10 shadow-2xl">
+    <i class="ph-fill ph-eye-closed text-6xl text-white"></i>
+  </div>
+
+  <h1 class="text-5xl md:text-7xl font-normal tracking-tight leading-[1.1] mb-8">
+    Look up. Your <span class="italic font-light opacity-90">eyes</span><br>will thank you
+  </h1>
+
+  <p class="text-lg md:text-xl text-muted font-light max-w-2xl leading-relaxed mb-12">
+    Smart screen breaks that quietly protect your vision while you work — and know when <span class="italic">not</span> to interrupt. In a meeting, mid-game, or deep in flow? Offscreen waits, then catches you between moments.
+  </p>
+
+  <div class="flex flex-col items-center gap-6">
+    <a href="https://github.com/dayaki/offscreen/releases/latest" target="_blank" rel="noopener" class="bg-white text-black px-10 py-4 rounded-2xl font-semibold flex items-center gap-3 text-lg hover:bg-zinc-200 transition-colors">
+      <i class="ph-bold ph-apple-logo"></i>
+      Download for Mac
+    </a>
+    <div class="text-xs font-mono text-zinc-500 flex items-center gap-4">
+      <span>v1.0.0</span>
+      <span class="opacity-30">|</span>
+      <span>macOS 15+ · Apple silicon</span>
+      <span class="opacity-30">|</span>
+      <span class="cursor-copy hover:text-white transition-colors" data-copy="brew install --cask dayaki/tap/offscreen">brew install --cask dayaki/tap/offscreen</span>
+    </div>
+  </div>
+</section>
+
+<!-- Screenshot / overlay mock -->
+<section class="max-w-6xl mx-auto px-6 mb-32">
+  <div class="bg-zinc-900/50 premium-border rounded-3xl aspect-[16/9] flex items-center justify-center relative overflow-hidden">
+    <div class="w-3/4 h-3/4 bg-[#111111] rounded-xl shadow-2xl premium-border flex flex-col p-4">
+      <div class="flex gap-1.5 mb-6">
+        <div class="w-3 h-3 rounded-full bg-zinc-800"></div>
+        <div class="w-3 h-3 rounded-full bg-zinc-800"></div>
+        <div class="w-3 h-3 rounded-full bg-zinc-800"></div>
       </div>
-      <div class="chips enter d5">
-        <span class="chip">100% local</span>
-        <span class="chip">No account</span>
-        <span class="chip">Zero permission prompts</span>
-        <span class="chip">Open source</span>
+      <div class="flex-1 flex flex-col items-center justify-center space-y-4">
+        <i class="ph-fill ph-eye-closed text-5xl text-zinc-700 mb-2"></i>
+        <div class="w-20 h-1 bg-zinc-800 rounded"></div>
+        <div class="w-32 h-1 bg-zinc-800 rounded"></div>
+        <div class="w-24 h-1 bg-zinc-800 rounded"></div>
       </div>
     </div>
+  </div>
+</section>
 
-    <div class="demo enter d3" id="demo">
-      <div class="screen">
-        <div class="fakewin"><i></i><i></i><i></i><i></i></div>
-        <div class="demo-menubar"><svg class="logo"><use href="#eyes"/></svg> <span id="mb-time">0:03</span></div>
-        <div class="demo-headsup">
-          <div class="top">
-            <span class="clock"></span>
-            <div>
-              <div class="time">00:<span id="hu-time">58</span></div>
-              <div class="sub">Almost time — your eyes have earned this.</div>
-            </div>
-          </div>
-          <div class="row"><span class="b">Start this break now</span><span class="b alt">+1m</span><span class="b alt">+5m</span><span class="b alt">+15m</span></div>
+<!-- Trust row -->
+<section class="max-w-5xl mx-auto px-6 mb-40">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+    <div class="flex flex-col items-center text-center space-y-3">
+      <div class="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center text-zinc-400">
+        <i class="ph ph-shield-check text-xl"></i>
+      </div>
+      <h3 class="text-sm font-medium">100% local</h3>
+      <p class="text-xs text-zinc-500 font-light">Settings &amp; stats stay on your Mac</p>
+    </div>
+    <div class="flex flex-col items-center text-center space-y-3">
+      <div class="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center text-zinc-400">
+        <i class="ph ph-user-circle-minus text-xl"></i>
+      </div>
+      <h3 class="text-sm font-medium">No account</h3>
+      <p class="text-xs text-zinc-500 font-light">No signup, no license keys</p>
+    </div>
+    <div class="flex flex-col items-center text-center space-y-3">
+      <div class="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center text-zinc-400">
+        <i class="ph ph-lock-key-open text-xl"></i>
+      </div>
+      <h3 class="text-sm font-medium">Zero prompts</h3>
+      <p class="text-xs text-zinc-500 font-light">Never asks for camera, mic, or screen access</p>
+    </div>
+    <div class="flex flex-col items-center text-center space-y-3">
+      <div class="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center text-zinc-400">
+        <i class="ph ph-code text-xl"></i>
+      </div>
+      <h3 class="text-sm font-medium">Open source</h3>
+      <p class="text-xs text-zinc-500 font-light">MIT-licensed and transparent</p>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section id="how-it-works" class="max-w-5xl mx-auto px-6 mb-40">
+  <div class="text-center mb-16">
+    <h2 class="text-3xl font-medium mb-4">Focus. Rest. Repeat.</h2>
+    <p class="text-muted font-light">A simple loop for sustained productivity and eye health.</p>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
+    <div class="space-y-6">
+      <div class="aspect-square bg-zinc-900 premium-border rounded-2xl flex items-center justify-center">
+        <i class="ph ph-brain text-5xl text-zinc-600"></i>
+      </div>
+      <div>
+        <h4 class="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-2">Step 01</h4>
+        <h3 class="text-xl font-medium mb-2">Deep Focus</h3>
+        <p class="text-sm text-muted font-light leading-relaxed">Offscreen stays silent in your menu bar while you work, tracking screen time without breaking your flow.</p>
+      </div>
+    </div>
+    <div class="space-y-6">
+      <div class="aspect-square bg-zinc-900 premium-border rounded-2xl flex items-center justify-center">
+        <i class="ph ph-bell-simple-ringing text-5xl text-zinc-600"></i>
+      </div>
+      <div>
+        <h4 class="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-2">Step 02</h4>
+        <h3 class="text-xl font-medium mb-2">Heads-up</h3>
+        <p class="text-sm text-muted font-light leading-relaxed">A gentle panel slides in before each break — start now, or snooze — without ever stealing your keyboard focus.</p>
+      </div>
+    </div>
+    <div class="space-y-6">
+      <div class="aspect-square bg-zinc-900 premium-border rounded-2xl flex items-center justify-center">
+        <i class="ph ph-leaf text-5xl text-zinc-600"></i>
+      </div>
+      <div>
+        <h4 class="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-2">Step 03</h4>
+        <h3 class="text-xl font-medium mb-2">Restful Break</h3>
+        <p class="text-sm text-muted font-light leading-relaxed">A full-screen overlay guides a 20-20-20-style rest across every display, then you're back, refreshed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features" class="max-w-6xl mx-auto px-6 mb-40">
+  <div class="text-center mb-20">
+    <h2 class="text-4xl font-medium mb-6">Built for focus.</h2>
+    <p class="text-muted font-light max-w-xl mx-auto">Everything you need to manage screen fatigue without adding digital noise to your life.</p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="bg-card premium-border p-8 rounded-3xl space-y-4">
+      <i class="ph ph-list-checks text-2xl text-zinc-400"></i>
+      <h3 class="text-lg font-medium">Smart Presets</h3>
+      <p class="text-sm text-muted font-light leading-relaxed">Balanced (20 min / 20 s), Deep Focus (45 min / 30 s), 20-20-20, or a fully custom rhythm — with a longer break every few cycles.</p>
+    </div>
+    <div class="bg-card premium-border p-8 rounded-3xl space-y-4">
+      <i class="ph ph-hand-stop text-2xl text-zinc-400"></i>
+      <h3 class="text-lg font-medium">Skip Difficulty</h3>
+      <p class="text-sm text-muted font-light leading-relaxed">From Casual (skip anytime) to Hardcore (no skipping), with an optional auto-lock so long breaks actually get you to step away.</p>
+    </div>
+    <div class="bg-card premium-border p-8 rounded-3xl space-y-4">
+      <i class="ph ph-cursor-click text-2xl text-zinc-400"></i>
+      <h3 class="text-lg font-medium">Cursor Countdown</h3>
+      <p class="text-sm text-muted font-light leading-relaxed">A subtle countdown pill follows your cursor in the final seconds before a break, so it never catches you mid-thought.</p>
+    </div>
+    <div class="bg-card premium-border p-8 rounded-3xl space-y-4">
+      <i class="ph ph-calendar-blank text-2xl text-zinc-400"></i>
+      <h3 class="text-lg font-medium">Planned Breaks</h3>
+      <p class="text-sm text-muted font-light leading-relaxed">Schedule named breaks — lunch, a walk — at fixed times of day, using the same gentle heads-up flow.</p>
+    </div>
+    <div class="bg-card premium-border p-8 rounded-3xl space-y-4">
+      <i class="ph ph-clock-afternoon text-2xl text-zinc-400"></i>
+      <h3 class="text-lg font-medium">Office Hours</h3>
+      <p class="text-sm text-muted font-light leading-relaxed">Set active hours and days so Offscreen only tracks and reminds you during your actual workday.</p>
+    </div>
+    <div class="bg-card premium-border p-8 rounded-3xl space-y-4">
+      <i class="ph ph-chart-line-up text-2xl text-zinc-400"></i>
+      <h3 class="text-lg font-medium">Screen Score</h3>
+      <p class="text-sm text-muted font-light leading-relaxed">A simple 0–100 metric for how well you're resting your eyes today, with a 7-day history — all stored locally in SQLite.</p>
+    </div>
+    <div class="bg-card premium-border p-8 rounded-3xl space-y-4">
+      <i class="ph ph-sliders text-2xl text-zinc-400"></i>
+      <h3 class="text-lg font-medium">Deep Customization</h3>
+      <p class="text-sm text-muted font-light leading-relaxed">Tune break lengths, overlay style, and rotating messages — plus an optional ambient sound that plays when a break ends.</p>
+    </div>
+    <div class="bg-card premium-border p-8 rounded-3xl space-y-4">
+      <i class="ph ph-command text-2xl text-zinc-400"></i>
+      <h3 class="text-lg font-medium">Power Shortcuts</h3>
+      <p class="text-sm text-muted font-light leading-relaxed">Global hotkeys to take a break now (⌥⇧B) or toggle pause (⌥⇧P) from any app, plus launch at login.</p>
+    </div>
+    <div class="bg-card premium-border p-8 rounded-3xl space-y-4">
+      <i class="ph ph-monitor text-2xl text-zinc-400"></i>
+      <h3 class="text-lg font-medium">Multi-Display Support</h3>
+      <p class="text-sm text-muted font-light leading-relaxed">Break overlays cover every display — even over full-screen apps — across dual monitors and ultra-wides.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Smart Pause -->
+<section class="max-w-5xl mx-auto px-6 mb-40 bg-zinc-900 premium-border rounded-[3rem] p-16 flex flex-col md:flex-row items-center gap-16">
+  <div class="flex-1 space-y-8 text-center md:text-left">
+    <h2 class="text-4xl font-medium leading-tight">Smart Pause. It knows when you're busy.</h2>
+    <p class="text-muted font-light text-lg">Offscreen doesn't blindly count time. It reads permission-free system signals to hold a break until you're actually free.</p>
+    <ul class="space-y-4 inline-block text-left">
+      <li class="flex items-center gap-3 text-zinc-300">
+        <i class="ph-bold ph-check text-white"></i>
+        <span>Pauses when your Mac is locked, asleep, or idle</span>
+      </li>
+      <li class="flex items-center gap-3 text-zinc-300">
+        <i class="ph-bold ph-check text-white"></i>
+        <span>Holds during meetings (camera or mic in use), screen sharing, and full-screen apps</span>
+      </li>
+      <li class="flex items-center gap-3 text-zinc-300">
+        <i class="ph-bold ph-check text-white"></i>
+        <span>Keeps going while you play music — Spotify or Apple Music isn't a meeting</span>
+      </li>
+    </ul>
+  </div>
+  <div class="flex-1 flex justify-center">
+    <div class="relative w-64 h-64">
+      <div class="absolute inset-0 bg-white/5 rounded-full blur-3xl opacity-20"></div>
+      <div class="relative w-full h-full border-4 border-zinc-800 rounded-full flex flex-col items-center justify-center">
+        <span class="text-zinc-600 text-xs font-bold uppercase tracking-widest mb-1">Status</span>
+        <span class="text-2xl font-medium italic opacity-50">Paused</span>
+        <div class="mt-4 flex gap-1">
+          <div class="w-1.5 h-1.5 rounded-full bg-zinc-600"></div>
+          <div class="w-1.5 h-1.5 rounded-full bg-zinc-600"></div>
+          <div class="w-1.5 h-1.5 rounded-full bg-zinc-600"></div>
         </div>
-        <div class="demo-overlay">
-          <div class="inner">
-            <div class="kicker">Short break</div>
-            <div class="prompt" id="ov-prompt">Look at something far away</div>
-            <div class="ring">
-              <svg width="130" height="130" viewBox="0 0 130 130">
-                <circle class="track" cx="65" cy="65" r="58" fill="none" stroke-width="6"/>
-                <circle class="arc" cx="65" cy="65" r="58" fill="none" stroke-width="6"/>
-              </svg>
-              <div class="time" id="ov-time">0:06</div>
-            </div>
-          </div>
-        </div>
       </div>
-      <div class="demo-caption">
-        <span data-phase="work">1 · Focus</span>
-        <span data-phase="notice">2 · Heads-up</span>
-        <span data-phase="break">3 · Break</span>
-      </div>
-    </div>
-  </div>
-</header>
-
-<section id="how">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <h2>A rhythm, <em>not a nag</em></h2>
-      <p>Every twenty minutes of screen time, your eye muscles deserve twenty seconds of distance. Offscreen turns that into a rhythm you never have to think about.</p>
-    </div>
-    <div class="steps">
-      <div class="step reveal"><span class="n"></span><h3>Focus</h3><p>The menu bar quietly counts down your work interval. Pick a preset — Balanced, Deep Focus, the classic 20-20-20 — or tune every number yourself.</p></div>
-      <div class="step reveal"><span class="n"></span><h3>Heads-up</h3><p>A minute before each break, a small panel slides in without stealing your keyboard. Start early, or snooze +1, +5, +15 minutes — within your snooze budget.</p></div>
-      <div class="step reveal"><span class="n"></span><h3>Break</h3><p>Every display softens into a countdown and a gentle prompt. Twenty seconds later you're back — eyes rested, shoulders down, posture reset.</p></div>
     </div>
   </div>
 </section>
 
-<section id="features">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <h2>Small app. <em>Full attention</em> to detail.</h2>
-      <p>Everything you'd expect from a paid break reminder — built native, fast, and yours.</p>
+<!-- Stats -->
+<section id="stats" class="max-w-4xl mx-auto px-6 mb-40 text-center">
+  <h2 class="text-4xl font-medium mb-12">Improve your Screen Score.</h2>
+  <div class="flex flex-col items-center">
+    <div class="text-8xl font-light tracking-tighter mb-4">84</div>
+    <div class="text-zinc-500 uppercase tracking-widest text-xs font-bold mb-10">Today's Screen Score</div>
+    <div class="w-full h-2 bg-zinc-900 rounded-full overflow-hidden mb-12">
+      <div class="h-full bg-white w-[84%]"></div>
     </div>
-    <div class="grid">
-      <div class="card reveal"><div class="glow"></div><div class="ico">⏱️</div><h3>Presets that fit your day</h3><p>Balanced 20 min / 20 s, Deep Focus 45 / 30 with long recovery breaks, the 20-20-20 rule — or fully custom timing.</p></div>
-      <div class="card reveal"><div class="glow"></div><div class="ico">🎚️</div><h3>Pick your discipline</h3><p>Casual lets you skip freely. Balanced makes you wait a few seconds. Hardcore doesn't negotiate.</p></div>
-      <div class="card reveal"><div class="glow"></div><div class="ico">🖱️</div><h3>Cursor countdown</h3><p>In the final seconds, a tiny pill follows your pointer — a break never catches you mid-thought.</p></div>
-      <div class="card reveal"><div class="glow"></div><div class="ico">🥪</div><h3>Planned breaks</h3><p>Lunch at 12:30, a walk at 4 — named breaks at fixed times, with the same gentle heads-up flow.</p></div>
-      <div class="card reveal"><div class="glow"></div><div class="ico">🌙</div><h3>Office hours</h3><p>Reminders only when you're actually working. Evenings and weekends stay yours.</p></div>
-      <div class="card reveal"><div class="glow"></div><div class="ico">📊</div><h3>Screen Score</h3><p>Daily score, active screen time, breaks kept vs. skipped, and per-app usage — in a local SQLite file, never the cloud.</p></div>
-      <div class="card reveal"><div class="glow"></div><div class="ico">🎨</div><h3>Make it yours</h3><p>Gradient, blur, or your own photo behind breaks. Your own messages. Optional chimes or ambient audio.</p></div>
-      <div class="card reveal"><div class="glow"></div><div class="ico">⌨️</div><h3>Keyboard first</h3><p>⌥⇧B starts a break anywhere. ⌥⇧P pauses everything. Launch at login and forget it's there.</p></div>
-      <div class="card reveal"><div class="glow"></div><div class="ico">🖥️</div><h3>Every display</h3><p>Breaks cover all your monitors at once — even over fullscreen apps — without yanking you out of your Space.</p></div>
+    <p class="text-muted font-light max-w-lg">Track your consistency over days and weeks and build a habit your eyes will thank you for — the more breaks you actually take, the higher your score.</p>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq" class="max-w-3xl mx-auto px-6 mb-40">
+  <h2 class="text-3xl font-medium mb-12 text-center">Frequently Asked Questions</h2>
+  <div class="space-y-8">
+    <div class="border-b border-zinc-800 pb-8">
+      <h3 class="text-lg font-medium mb-3">Does it use the camera or track my eyes?</h3>
+      <p class="text-muted font-light text-sm leading-relaxed">No. Offscreen never accesses your camera, microphone, or screen contents. It only reads permission-free system signals — like whether the camera is <em>in use</em> (a meeting) or how long you've been idle — so macOS never even shows a privacy prompt.</p>
+    </div>
+    <div class="border-b border-zinc-800 pb-8">
+      <h3 class="text-lg font-medium mb-3">Can I use it alongside a Pomodoro workflow?</h3>
+      <p class="text-muted font-light text-sm leading-relaxed">Yes. Run it as your main timer with the Deep Focus preset, or in a lighter 20-20-20 eye-rest rhythm alongside another tool.</p>
+    </div>
+    <div class="border-b border-zinc-800 pb-8">
+      <h3 class="text-lg font-medium mb-3">Is there a mobile version?</h3>
+      <p class="text-muted font-light text-sm leading-relaxed">No — Offscreen is macOS-only, focused on computer-related eye strain. For your phone, the built-in Screen Time features are a good fit.</p>
+    </div>
+    <div class="border-b border-zinc-800 pb-8">
+      <h3 class="text-lg font-medium mb-3">What is the Screen Score?</h3>
+      <p class="text-muted font-light text-sm leading-relaxed">A weighted daily metric based on your break consistency and adherence to eye-rest guidelines. Above 80 is excellent. It's computed and stored entirely on your Mac.</p>
+    </div>
+    <div class="border-b border-zinc-800 pb-8">
+      <h3 class="text-lg font-medium mb-3">How do I install and uninstall it?</h3>
+      <p class="text-muted font-light text-sm leading-relaxed">Install with <code class="text-zinc-300">brew install --cask dayaki/tap/offscreen</code> (or download from Releases). Remove it with <code class="text-zinc-300">brew uninstall --cask offscreen</code> — no leftover daemons or config files.</p>
+    </div>
+    <div class="border-b border-zinc-800 pb-8">
+      <h3 class="text-lg font-medium mb-3">Is this Lookaway?</h3>
+      <p class="text-muted font-light text-sm leading-relaxed">No. Offscreen is an independent, open-source project inspired by <a href="https://lookaway.com" target="_blank" rel="noopener" class="text-zinc-300 hover:text-white transition-colors">Lookaway</a>, which pioneered this thoughtful approach to screen breaks. Offscreen isn't affiliated with or endorsed by its makers.</p>
     </div>
   </div>
 </section>
 
-<section id="smartpause">
-  <div class="wrap">
-    <div class="pause-band reveal">
-      <div class="sec-head">
-        <h2>It knows when to <em>stay quiet</em></h2>
-        <p>Smart Pause reads harmless system signals — never your screen, never your keystrokes — and holds breaks the moment life is happening. The break fires the second you're free.</p>
+<!-- Download CTA -->
+<section id="download" class="max-w-5xl mx-auto px-6 mb-40 text-center">
+  <div class="bg-white text-black rounded-[3.5rem] py-24 px-12">
+    <h2 class="text-5xl font-medium tracking-tight mb-8">Ready to give your eyes a break?</h2>
+    <p class="text-zinc-600 text-lg mb-12 max-w-xl mx-auto">A free, open-source Mac app for anyone who spends their day in front of a screen.</p>
+
+    <div class="flex flex-col items-center gap-8">
+      <a href="https://github.com/dayaki/offscreen/releases/latest" target="_blank" rel="noopener" class="bg-black text-white px-12 py-5 rounded-2xl font-semibold flex items-center gap-3 text-xl hover:bg-zinc-900 transition-colors">
+        <i class="ph-bold ph-apple-logo"></i>
+        Download for Mac
+      </a>
+      <div class="flex flex-col items-center gap-2">
+        <span class="text-zinc-400 text-sm">Or install via terminal</span>
+        <code class="cursor-copy bg-zinc-100 text-zinc-900 px-6 py-3 rounded-lg font-mono text-sm border border-zinc-200" data-copy="brew install --cask dayaki/tap/offscreen">brew install --cask dayaki/tap/offscreen</code>
+        <span class="text-zinc-400 text-xs mt-2">Signed &amp; notarized by Apple — opens with no security warnings. Requires macOS 15+ on Apple silicon.</span>
       </div>
-      <div class="marquee"><div class="mtrack" id="mt1">
-        <span class="signal">📷 <b>Camera on</b> · in a meeting</span>
-        <span class="signal">🎙️ <b>Mic live</b> · on a call</span>
-        <span class="signal">▶️ <b>Media playing</b> · movie night</span>
-        <span class="signal">🖥️ <b>Screen shared</b> · presenting</span>
-      </div></div>
-      <div class="marquee rev"><div class="mtrack" id="mt2">
-        <span class="signal">🎮 <b>Fullscreen game</b> · clutch round</span>
-        <span class="signal">🧘 <b>Focus apps</b> · you choose them</span>
-        <span class="signal">⌨️ <b>Mid-keystroke</b> · finish the thought</span>
-        <span class="signal">💤 <b>Away from Mac</b> · counts as a break</span>
-      </div></div>
     </div>
   </div>
 </section>
 
-<section id="stats">
-  <div class="wrap stats-grid">
-    <div class="score-card reveal" id="scorecard">
-      <div class="score-label">Screen Score</div>
-      <div class="score-num" id="score">0</div>
-      <div class="score-sub">great habits — 14 breaks kept, 1 skipped</div>
-      <div class="bars" role="img" aria-label="Active screen hours for the last seven days">
-        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:52%"></div></div><span>Mon</span></div>
-        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:74%"></div></div><span>Tue</span></div>
-        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:64%"></div></div><span>Wed</span></div>
-        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:88%"></div></div><span>Thu</span></div>
-        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:70%"></div></div><span>Fri</span></div>
-        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:28%"></div></div><span>Sat</span></div>
-        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:18%"></div></div><span>Sun</span></div>
-      </div>
-    </div>
-    <div class="sec-head reveal" style="margin-bottom:0">
-      <h2>Know your screen, <em>keep your privacy</em></h2>
-      <p>Offscreen tracks the things worth knowing — how long you've been on screen, which apps eat your day, whether you're actually taking breaks — and distills it into one daily Screen Score.</p>
-      <p style="margin-top:12px">Nothing leaves your Mac. There's no account, no telemetry, and — unusually — <strong>no permission prompts at all</strong>: no Accessibility, no Screen Recording, no camera or microphone access. Ever.</p>
-    </div>
+<!-- Footer -->
+<footer class="max-w-6xl mx-auto px-6 py-12 border-t border-zinc-900 flex flex-col md:flex-row justify-between items-center gap-8">
+  <div class="flex items-center gap-2">
+    <i class="ph-fill ph-eye-closed text-xl"></i>
+    <span class="font-medium tracking-tight">Offscreen</span>
   </div>
-</section>
 
-<section id="get">
-  <div class="wrap">
-    <div class="get reveal">
-      <h2>Free. Local. <em>Yours.</em></h2>
-      <p>Offscreen is a personal open-source project — no license keys, no subscriptions. Install it with Homebrew, or download the latest release.</p>
-      <div class="term">
-        <div><span class="dim"># install with Homebrew</span></div>
-        <div><span class="dim">$</span> brew install --cask dayaki/tap/offscreen</div>
-        <div class="ok">✓ Offscreen.app in /Applications</div>
-      </div>
-      <div class="cta-row" style="justify-content:center;margin-top:26px">
-        <a class="btn" href="https://github.com/dayaki/offscreen/releases/latest">Download the latest release <span class="arr">→</span></a>
-        <a class="btn ghost" href="https://github.com/dayaki/offscreen">View source on GitHub</a>
-      </div>
-      <div class="req">Requires macOS 15+ · Apple silicon · signed &amp; notarized · or build from source</div>
-    </div>
+  <div class="flex items-center gap-8 text-sm text-zinc-500 font-light">
+    <a href="https://github.com/dayaki/offscreen" target="_blank" rel="noopener" class="hover:text-white transition-colors">GitHub</a>
+    <a href="https://github.com/dayaki/offscreen/releases/latest" target="_blank" rel="noopener" class="hover:text-white transition-colors">Releases</a>
+    <a href="https://github.com/dayaki/offscreen/issues" target="_blank" rel="noopener" class="hover:text-white transition-colors">Report an issue</a>
+    <a href="https://github.com/dayaki/offscreen/blob/main/LICENSE" target="_blank" rel="noopener" class="hover:text-white transition-colors">License</a>
   </div>
-</section>
 
-<section id="faq">
-  <div class="wrap">
-    <div class="sec-head reveal"><h2>Questions, <em>answered</em></h2></div>
-    <details class="reveal" open>
-      <summary>Why do I need screen breaks at all?</summary>
-      <p>Staring at a fixed distance keeps the focusing muscles in your eyes contracted for hours, which drives digital eye strain — dryness, blur, headaches. Optometrists suggest the 20-20-20 habit: every 20 minutes, look at something about 20 feet away for 20 seconds. Offscreen exists to make that habit automatic.</p>
-    </details>
-    <details class="reveal">
-      <summary>Will it interrupt my meetings or games?</summary>
-      <p>No. Smart Pause holds breaks while your camera or mic is in use, media is playing, your screen is shared, or a fullscreen app is up — and you can add your own "never interrupt" apps. Due breaks fire as soon as you're free.</p>
-    </details>
-    <details class="reveal">
-      <summary>What permissions does it ask for?</summary>
-      <p>None. Every detector is built on permission-free system APIs, so macOS never shows a privacy prompt for Offscreen. It can't see your screen contents or read your keys — by design and by architecture.</p>
-    </details>
-    <details class="reveal">
-      <summary>Where does my data live?</summary>
-      <p>In <code>~/Library/Application Support/Offscreen/</code> — a human-readable settings JSON and a SQLite stats file you can open yourself. Nothing is sent anywhere.</p>
-    </details>
-    <details class="reveal">
-      <summary>Is this Lookaway?</summary>
-      <p>No — Offscreen is an independent, personal open-source project inspired by <a href="https://lookaway.com">Lookaway</a>, which deserves the credit for pioneering this thoughtful approach to screen breaks. If you want a polished commercial app with support and an iPhone companion, go buy it. Offscreen is not affiliated with or endorsed by its makers.</p>
-    </details>
-  </div>
-</section>
-
-<footer>
-  <div class="wrap foot">
-    <span class="brand" style="font-size:14px"><svg class="logo" style="width:18px;height:18px"><use href="#eyes"/></svg> Offscreen</span>
-    <span>Built with Swift &amp; SwiftUI · © <span id="year">2026</span> · Take a break, seriously.</span>
+  <div class="text-xs text-zinc-600 font-light">
+    © 2026 Offscreen · Built for healthy eyes · Inspired by Lookaway
   </div>
 </footer>
 
 <script>
-  document.getElementById("year").textContent = new Date().getFullYear();
-  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  // duplicate marquee tracks for a seamless loop
-  for (const id of ["mt1", "mt2"]) {
-    const track = document.getElementById(id);
-    track.innerHTML += track.innerHTML;
-  }
-
-  // ---- hero demo: loop the whole break cycle ----
-  const demo = document.getElementById("demo");
-  const mbTime = document.getElementById("mb-time");
-  const huTime = document.getElementById("hu-time");
-  const ovTime = document.getElementById("ov-time");
-  const captions = document.querySelectorAll(".demo-caption span");
-  const prompts = ["Look at something far away", "Unclench your jaw", "Blink slowly a few times", "Gaze out the window"];
-  let cycle = 0;
-
-  function setPhase(phase) {
-    demo.classList.remove("work", "notice", "break");
-    demo.classList.add(phase);
-    captions.forEach((c) => c.classList.toggle("on", c.dataset.phase === phase));
-  }
-
-  function runDemo() {
-    // phase 1 — focus: menu bar ticks down 0:03 → 0:01
-    setPhase("work");
-    document.getElementById("ov-prompt").textContent = prompts[cycle++ % prompts.length];
-    let t = 3;
-    mbTime.textContent = "0:0" + t;
-    const tick = setInterval(() => {
-      t -= 1;
-      if (t > 0) mbTime.textContent = "0:0" + t;
-      else clearInterval(tick);
-    }, 1000);
-
-    // phase 2 — heads-up panel slides in, its countdown breathes
-    setTimeout(() => {
-      setPhase("notice");
-      mbTime.textContent = "0:58";
-      let h = 58;
-      const htick = setInterval(() => {
-        h -= 1;
-        huTime.textContent = String(h).padStart(2, "0");
-        if (h <= 55) clearInterval(htick);
-      }, 1000);
-    }, 3200);
-
-    // phase 3 — the break overlay, ring drains 6 s
-    setTimeout(() => {
-      setPhase("break");
-      // restart the ring drain animation
-      const arc = demo.querySelector(".arc");
-      arc.style.animation = "none";
-      void arc.offsetWidth;
-      arc.style.animation = "";
-      let b = 6;
-      ovTime.textContent = "0:06";
-      const btick = setInterval(() => {
-        b -= 1;
-        ovTime.textContent = "0:0" + Math.max(0, b);
-        if (b <= 0) clearInterval(btick);
-      }, 1000);
-    }, 7200);
-
-    // reset
-    setTimeout(() => setPhase("work"), 14200);
-  }
-
-  if (!reduced) {
-    runDemo();
-    setInterval(runDemo, 15600);
-  } else {
-    setPhase("break");
-  }
-
-  // ---- reveals with stagger ----
-  const io = new IntersectionObserver(
-    (entries) =>
-      entries.forEach((e) => {
-        if (!e.isIntersecting) return;
-        e.target.classList.add("in");
-        io.unobserve(e.target);
-      }),
-    { threshold: 0.14 }
-  );
-  document.querySelectorAll(".reveal").forEach((el, i) => {
-    el.style.transitionDelay = (i % 3) * 0.09 + "s";
-    io.observe(el);
+  // Click-to-copy for the install commands (progressive enhancement).
+  document.querySelectorAll('[data-copy]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var text = el.getAttribute('data-copy');
+      if (!navigator.clipboard) return;
+      navigator.clipboard.writeText(text).then(function () {
+        var original = el.textContent;
+        el.textContent = 'Copied ✓';
+        setTimeout(function () { el.textContent = original; }, 1200);
+      }).catch(function () {});
+    });
   });
-
-  // ---- score count-up ----
-  const score = document.getElementById("score");
-  const so = new IntersectionObserver((entries) => {
-    if (!entries[0].isIntersecting) return;
-    so.disconnect();
-    if (reduced) { score.textContent = "92"; return; }
-    const t0 = performance.now();
-    const dur = 1400;
-    (function step(now) {
-      const p = Math.min(1, (now - t0) / dur);
-      score.textContent = Math.round(92 * (1 - Math.pow(1 - p, 3)));
-      if (p < 1) requestAnimationFrame(step);
-    })(t0);
-  }, { threshold: 0.4 });
-  so.observe(document.getElementById("scorecard"));
 </script>
+
 </body>
 </html>
