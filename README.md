@@ -1,8 +1,9 @@
 # Offscreen
 
 A native macOS menu bar app that protects your eyes with smart screen breaks —
-a personal, local clone of the commercial app Lookaway, built in Swift/SwiftUI
-for macOS 15 and later.
+and knows when not to interrupt. Built in Swift/SwiftUI for macOS 15 and later,
+inspired by the apps that pioneered mindful screen breaks, but native, private,
+and free.
 
 **[Website](https://dayaki.github.io/offscreen/)** · **[Download the latest release](https://github.com/dayaki/offscreen/releases/latest)** · macOS 15+ · Apple silicon · signed & notarized
 
