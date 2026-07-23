@@ -2,9 +2,9 @@
 
 A native macOS menu bar app that protects your eyes with smart screen breaks —
 a personal, local clone of the commercial app Lookaway, built in Swift/SwiftUI
-for macOS 26.
+for macOS 15 and later.
 
-**[Website](https://dayaki.github.io/offscreen/)** · **[Download the latest release](https://github.com/dayaki/offscreen/releases/latest)** · macOS 26 · Apple silicon · signed & notarized
+**[Website](https://dayaki.github.io/offscreen/)** · **[Download the latest release](https://github.com/dayaki/offscreen/releases/latest)** · macOS 15+ · Apple silicon · signed & notarized
 
 ## Features
 
@@ -50,10 +50,10 @@ Input Monitoring, camera, or microphone access.
 **Homebrew** (recommended):
 
 ```sh
-brew install --cask dayaki/offscreen/offscreen
+brew install --cask dayaki/tap/offscreen
 ```
 
-This adds the tap `dayaki/offscreen` and installs `Offscreen.app` into
+This adds the tap `dayaki/tap` and installs `Offscreen.app` into
 `/Applications`. Update later with `brew upgrade --cask offscreen`.
 
 **Or download directly:** grab `Offscreen-<version>.zip` from the
@@ -61,11 +61,11 @@ This adds the tap `dayaki/offscreen` and installs `Offscreen.app` into
 and drag `Offscreen.app` to Applications. Releases are Developer ID-signed and
 notarized by Apple, so they open without a Gatekeeper warning.
 
-Requires macOS 26 on Apple silicon.
+Requires macOS 15 (Sequoia) or later on Apple silicon.
 
 ## Build from source
 
-Requires Xcode 26+ on macOS 26+.
+Requires Xcode 26+ (Swift 6.2 toolchain).
 
 ```sh
 Scripts/build-app.sh          # swift build → Offscreen.app → ~/Applications
@@ -143,7 +143,7 @@ Then, per release:
 # bump CFBundleShortVersionString in Resources/Info.plist, then:
 Scripts/release.sh                       # → dist/Offscreen-<version>.zip (+ sha256)
 gh release create v<version> dist/Offscreen-<version>.zip --title "Offscreen <version>"
-# update Casks/offscreen.rb in the homebrew-offscreen tap with the new version + sha256
+# update Casks/offscreen.rb in the homebrew-tap repo with the new version + sha256
 ```
 
 ## Architecture (short version)
