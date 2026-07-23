@@ -43,7 +43,7 @@ cat > "$TMP/menu.html" <<HTML
 <!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="$CSS">
 <style>html,body{margin:0;width:256px;height:256px;background:transparent;
  display:flex;align-items:center;justify-content:center}
-.badge{width:248px;height:248px;border-radius:50%;background:#fff;
+.badge{width:248px;height:248px;border-radius:30%;background:#fff;
  display:flex;align-items:center;justify-content:center}
 .badge i{font-size:150px;color:#0a0a0c;line-height:1}</style></head>
 <body><div class="badge"><i class="ph-fill ph-eye-closed"></i></div></body></html>
