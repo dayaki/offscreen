@@ -23,6 +23,10 @@ fi
 if [ -f "Resources/AppIcon.icns" ]; then
     cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 fi
+# Menu bar template image (the eye-closed mark).
+if [ -f "Resources/MenuBarIcon.png" ]; then
+    cp Resources/MenuBarIcon.png "$APP/Contents/Resources/MenuBarIcon.png"
+fi
 
 # Bundled ambient tracks (played during breaks).
 if [ -d "Resources/Ambient" ]; then

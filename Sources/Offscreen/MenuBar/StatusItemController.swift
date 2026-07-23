@@ -18,8 +18,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         super.init()
 
         if let button = item.button {
-            button.image = NSImage(systemSymbolName: "eyes", accessibilityDescription: "Offscreen")
-                ?? NSImage(systemSymbolName: "eye", accessibilityDescription: "Offscreen")
+            button.image = Self.menuBarIcon()
             button.imagePosition = .imageLeading
         }
         let menu = NSMenu()
@@ -30,6 +29,18 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             if case .tick = event { self?.updateTitle() }
         }
         updateTitle()
+    }
+
+    /// The Offscreen "eye-closed" mark as a menu bar template image (tints itself
+    /// for light/dark menu bars). Falls back to an SF Symbol if the asset is missing.
+    private static func menuBarIcon() -> NSImage {
+        if let url = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png"),
+           let image = NSImage(contentsOf: url) {
+            image.size = NSSize(width: 18, height: 18)
+            image.isTemplate = true
+            return image
+        }
+        return NSImage(systemSymbolName: "eye", accessibilityDescription: "Offscreen") ?? NSImage()
     }
 
     // MARK: Title
