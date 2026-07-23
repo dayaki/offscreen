@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offscreen — smart screen breaks for macOS</title>
+<meta name="description" content="Offscreen is a native macOS menu bar app that schedules smart screen breaks — and knows when not to interrupt. Free, local, zero permission prompts.">
+<style>
+  :root {
+    --bg0: #0a0612;
+    --bg1: #140c20;
+    --ink: #f7f2fa;
+    --ink2: #c3b5d1;
+    --ink3: #8d7da0;
+    --amber: #ffb45c;
+    --rose: #ff7d9c;
+    --violet: #b78cff;
+    --grad: linear-gradient(105deg, var(--amber), var(--rose) 55%, var(--violet));
+    --card: rgba(255, 255, 255, 0.05);
+    --border: rgba(255, 255, 255, 0.1);
+    --border-warm: rgba(255, 180, 92, 0.22);
+    --shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+    --r: 20px;
+    --max: 1100px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg0: #faf5ee;
+      --bg1: #f1e8e0;
+      --ink: #241633;
+      --ink2: #5b4a70;
+      --ink3: #8d7da0;
+      --amber: #e08b1f;
+      --rose: #e0447a;
+      --violet: #7a4fd6;
+      --card: rgba(255, 255, 255, 0.65);
+      --border: rgba(36, 22, 51, 0.1);
+      --border-warm: rgba(224, 139, 31, 0.3);
+      --shadow: 0 30px 90px rgba(60, 30, 90, 0.16);
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    background: var(--bg0); color: var(--ink); line-height: 1.6;
+    -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  }
+  ::selection { background: color-mix(in oklab, var(--rose) 40%, transparent); }
+
+  /* ---- aurora background ---- */
+  .aurora { position: fixed; inset: -20%; z-index: -2; filter: blur(70px); opacity: .55; }
+  .aurora i { position: absolute; border-radius: 50%; }
+  .aurora i:nth-child(1) { width: 46vw; height: 46vw; left: -8%; top: -12%;
+    background: radial-gradient(circle, color-mix(in oklab, var(--violet) 55%, transparent), transparent 65%);
+    animation: drift1 26s ease-in-out infinite alternate; }
+  .aurora i:nth-child(2) { width: 40vw; height: 40vw; right: -6%; top: 4%;
+    background: radial-gradient(circle, color-mix(in oklab, var(--amber) 45%, transparent), transparent 65%);
+    animation: drift2 32s ease-in-out infinite alternate; }
+  .aurora i:nth-child(3) { width: 52vw; height: 52vw; left: 24%; bottom: -26%;
+    background: radial-gradient(circle, color-mix(in oklab, var(--rose) 38%, transparent), transparent 65%);
+    animation: drift3 38s ease-in-out infinite alternate; }
+  @keyframes drift1 { to { transform: translate(9vw, 7vh) scale(1.15); } }
+  @keyframes drift2 { to { transform: translate(-7vw, 10vh) scale(0.9); } }
+  @keyframes drift3 { to { transform: translate(-9vw, -7vh) scale(1.1); } }
+
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+
+  /* ---- nav ---- */
+  nav { position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    background: color-mix(in oklab, var(--bg0) 70%, transparent);
+    border-bottom: 1px solid var(--border); }
+  .nav-inner { display: flex; align-items: center; height: 62px; gap: 28px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
+  .logo { width: 26px; height: 26px; color: var(--amber); animation: blink 6s infinite; transform-origin: center; }
+  @keyframes blink { 0%, 94%, 100% { transform: scaleY(1); } 96.5% { transform: scaleY(0.08); } }
+  .nav-links { display: flex; gap: 24px; margin-left: auto; }
+  .nav-links a { color: var(--ink2); text-decoration: none; font-size: 14px; position: relative; }
+  .nav-links a::after { content: ""; position: absolute; left: 0; bottom: -4px; height: 2px; width: 0;
+    background: var(--grad); border-radius: 2px; transition: width .25s var(--ease); }
+  .nav-links a:hover { color: var(--ink); }
+  .nav-links a:hover::after { width: 100%; }
+
+  .btn { position: relative; display: inline-flex; align-items: center; gap: 8px;
+    padding: 11px 22px; border-radius: 999px; font-size: 14.5px; font-weight: 700;
+    text-decoration: none; color: #1c0f28; background: var(--grad); background-size: 160% 100%;
+    transition: background-position .4s var(--ease), transform .2s var(--ease), box-shadow .3s var(--ease); }
+  .btn:hover { background-position: 90% 0; transform: translateY(-2px);
+    box-shadow: 0 12px 36px color-mix(in oklab, var(--rose) 45%, transparent); }
+  .btn .arr { transition: transform .25s var(--ease); }
+  .btn:hover .arr { transform: translateX(4px); }
+  .btn.ghost { background: var(--card); color: var(--ink); border: 1px solid var(--border); }
+  .btn.ghost:hover { border-color: var(--border-warm); box-shadow: none; }
+
+  /* ---- hero ---- */
+  header.hero { padding: 96px 0 70px; position: relative; }
+  .hero-grid { display: grid; grid-template-columns: 1.02fr 0.98fr; gap: 56px; align-items: center; }
+  .enter { opacity: 0; transform: translateY(26px); animation: enter .9s var(--ease) forwards; }
+  .enter.d1 { animation-delay: .08s } .enter.d2 { animation-delay: .18s }
+  .enter.d3 { animation-delay: .3s } .enter.d4 { animation-delay: .42s } .enter.d5 { animation-delay: .56s }
+  @keyframes enter { to { opacity: 1; transform: none; } }
+
+  .eyebrow { display: inline-flex; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 700;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); margin-bottom: 20px; }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--amber) 60%, transparent); animation: pulse 2.4s infinite; }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 9px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+  h1 { font-size: clamp(42px, 6vw, 72px); line-height: 1.02; letter-spacing: -0.035em; font-weight: 800; }
+  h1 .shine { background: var(--grad); background-size: 200% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shimmer 7s ease-in-out infinite; }
+  @keyframes shimmer { 0%,100% { background-position: 0% 0; } 50% { background-position: 100% 0; } }
+
+  .lede { font-size: 18.5px; color: var(--ink2); margin: 24px 0 32px; max-width: 44ch; }
+  .cta-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 32px; }
+  .chip { font-size: 12.5px; color: var(--ink2); border: 1px solid var(--border); border-radius: 999px;
+    padding: 6px 13px; background: var(--card); transition: border-color .2s, color .2s; }
+  .chip:hover { border-color: var(--border-warm); color: var(--ink); }
+
+  /* ---- hero demo: the break cycle, on loop ---- */
+  .demo { position: relative; }
+  .screen { position: relative; border-radius: 24px; overflow: hidden;
+    border: 1px solid var(--border); box-shadow: var(--shadow); aspect-ratio: 15 / 11;
+    background:
+      radial-gradient(120% 90% at 75% 0%, #3d2a55 0%, transparent 55%),
+      radial-gradient(100% 80% at 10% 100%, #4d2438 0%, transparent 55%),
+      linear-gradient(180deg, #170d24, #0d0716); }
+  /* fake desktop window */
+  .fakewin { position: absolute; left: 10%; right: 14%; top: 17%; bottom: 22%;
+    border-radius: 12px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.09); }
+  .fakewin::before { content: ""; position: absolute; left: 12px; top: 11px; width: 8px; height: 8px;
+    border-radius: 50%; background: #ff5f57; box-shadow: 14px 0 0 #febc2e, 28px 0 0 #28c840; }
+  .fakewin i { position: absolute; left: 14px; height: 7px; border-radius: 4px; background: rgba(255,255,255,.1); }
+  .fakewin i:nth-child(1) { top: 36px; width: 62%; } .fakewin i:nth-child(2) { top: 52px; width: 44%; }
+  .fakewin i:nth-child(3) { top: 68px; width: 71%; } .fakewin i:nth-child(4) { top: 84px; width: 35%; }
+
+  .demo-menubar { position: absolute; top: 10px; right: 12px; display: flex; align-items: center; gap: 7px;
+    border-radius: 999px; padding: 6px 13px; font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+    color: #fff; background: rgba(20,12,32,.75); border: 1px solid rgba(255,255,255,.14);
+    backdrop-filter: blur(8px); }
+  .demo-menubar .logo { width: 15px; height: 15px; }
+
+  .demo-headsup { position: absolute; top: 44px; right: 12px; width: 252px;
+    border-radius: 17px; padding: 14px;
+    background: linear-gradient(180deg, #2a1a40, #160d26);
+    border: 1px solid rgba(255,255,255,.12); backdrop-filter: blur(10px);
+    opacity: 0; transform: translateX(24px) scale(.97);
+    transition: opacity .5s var(--ease), transform .5s var(--ease); }
+  .demo.notice .demo-headsup { opacity: 1; transform: none; }
+  .demo-headsup .top { display: flex; align-items: center; gap: 10px; }
+  .demo-headsup .clock { width: 34px; height: 34px; border-radius: 50%; flex: none; position: relative;
+    background: linear-gradient(135deg, var(--rose), var(--amber)); }
+  .demo-headsup .clock::before { content: ""; position: absolute; inset: 3px; border-radius: 50%;
+    background: repeating-conic-gradient(rgba(255,255,255,.55) 0 1.6deg, transparent 1.6deg 30deg);
+    -webkit-mask: radial-gradient(circle, transparent 62%, #000 63% 72%, transparent 73%);
+    mask: radial-gradient(circle, transparent 62%, #000 63% 72%, transparent 73%); }
+  .demo-headsup .clock::after { content: ""; position: absolute; left: 50%; bottom: 50%;
+    width: 2.5px; height: 11px; border-radius: 2px; background: #fff;
+    transform-origin: bottom center; transform: translateX(-50%) rotate(-56deg);
+    animation: hand 8s linear infinite; }
+  @keyframes hand { to { transform: translateX(-50%) rotate(-416deg); } }
+  .demo-headsup .time { color: #fff; font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .demo-headsup .sub { color: rgba(255,255,255,.6); font-size: 10.5px; }
+  .demo-headsup .row { display: flex; gap: 5px; margin-top: 11px; }
+  .demo-headsup .b { font-size: 10.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px;
+    background: rgba(255,255,255,.14); color: #fff; }
+  .demo-headsup .b.alt { background: transparent; color: rgba(255,255,255,.8);
+    border: 1px solid rgba(255,255,255,.22); padding: 4px 9px; }
+
+  .demo-overlay { position: absolute; inset: 0; display: grid; place-items: center;
+    background: #0a0612; overflow: hidden;
+    box-shadow: inset 0 0 90px rgba(0,0,0,.55);
+    opacity: 0; transform: scale(1.04); pointer-events: none;
+    transition: opacity .7s var(--ease), transform .7s var(--ease); }
+  /* aurora field — drifting violet/rose/amber blooms, like the app's shader */
+  .demo-overlay::before { content: ""; position: absolute; inset: -35%;
+    background:
+      radial-gradient(38% 45% at 26% 32%, rgba(183,140,255,.36), transparent 70%),
+      radial-gradient(42% 48% at 74% 64%, rgba(255,125,156,.30), transparent 70%),
+      radial-gradient(36% 44% at 58% 18%, rgba(255,180,92,.24), transparent 70%),
+      radial-gradient(44% 52% at 40% 82%, rgba(92,41,87,.45), transparent 72%);
+    filter: blur(18px);
+    animation: aurora-drift 16s ease-in-out infinite alternate; }
+  @keyframes aurora-drift {
+    0%   { transform: translate(-3%, -2%) rotate(-2deg) scale(1); }
+    50%  { transform: translate(3%, 2%) rotate(2deg) scale(1.07); }
+    100% { transform: translate(-2%, 3%) rotate(-1deg) scale(1.03); } }
+  /* film grain */
+  .demo-overlay::after { content: ""; position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    background-size: 180px 180px;
+    opacity: .38; mix-blend-mode: overlay; }
+  .demo.break .demo-overlay { opacity: 1; transform: none; }
+  .demo-overlay .inner { text-align: center; position: relative; z-index: 1; }
+  .demo-overlay .kicker { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: rgba(255,255,255,.5); }
+  .demo-overlay .prompt { color: #fff; font-size: 19px; font-weight: 700; margin: 8px 0 18px; letter-spacing: -0.01em; }
+  .ring { position: relative; width: 130px; height: 130px; margin: 0 auto; }
+  .ring svg { transform: rotate(-90deg); display: block; }
+  .ring .track { stroke: rgba(255,255,255,.14); }
+  .ring .arc { stroke: url(#ringGrad); stroke-linecap: round; stroke-dasharray: 364; stroke-dashoffset: 0; }
+  .demo.break .ring .arc { animation: drain 6s linear forwards; }
+  @keyframes drain { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 364; } }
+  .ring .time { position: absolute; inset: 0; display: grid; place-items: center;
+    color: #fff; font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .demo-caption { display: flex; justify-content: center; gap: 8px; margin-top: 18px; }
+  .demo-caption span { font-size: 12px; color: var(--ink3); padding: 5px 12px; border-radius: 999px;
+    border: 1px solid var(--border); transition: all .3s var(--ease); }
+  .demo-caption span.on { color: var(--ink); border-color: var(--border-warm);
+    background: color-mix(in oklab, var(--amber) 10%, transparent); }
+
+  /* ---- sections ---- */
+  section { padding: 84px 0; position: relative; }
+  .sec-head { max-width: 64ch; margin-bottom: 46px; }
+  .sec-head h2 { font-size: clamp(28px, 3.6vw, 42px); letter-spacing: -0.025em; line-height: 1.12; font-weight: 800; }
+  .sec-head h2 em { font-style: normal; background: var(--grad);
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sec-head p { color: var(--ink2); margin-top: 14px; font-size: 17px; }
+
+  .reveal { opacity: 0; transform: translateY(28px); transition: opacity .8s var(--ease), transform .8s var(--ease); }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* steps */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: step; }
+  .step { position: relative; background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r); padding: 30px 26px; overflow: hidden; }
+  .step::after { content: ""; position: absolute; inset: 0; border-radius: var(--r);
+    background: radial-gradient(300px 160px at 20% 0%, color-mix(in oklab, var(--amber) 9%, transparent), transparent 70%);
+    opacity: 0; transition: opacity .4s; }
+  .step:hover::after { opacity: 1; }
+  .step .n { counter-increment: step; font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -0.04em;
+    background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; opacity: .9; }
+  .step .n::before { content: "0" counter(step); }
+  .step h3 { font-size: 18px; margin: 14px 0 8px; letter-spacing: -0.01em; }
+  .step p { font-size: 14.5px; color: var(--ink2); position: relative; }
+
+  /* features */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card { position: relative; background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r); padding: 26px; overflow: hidden;
+    transition: transform .3s var(--ease), border-color .3s; }
+  .card:hover { transform: translateY(-5px); border-color: var(--border-warm); }
+  .card .glow { position: absolute; inset: 0; opacity: 0; transition: opacity .4s;
+    background: radial-gradient(340px 200px at 30% -10%, color-mix(in oklab, var(--rose) 10%, transparent), transparent 70%); }
+  .card:hover .glow { opacity: 1; }
+  .card .ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
+    font-size: 19px; margin-bottom: 16px; position: relative;
+    background: linear-gradient(135deg, color-mix(in oklab, var(--amber) 20%, transparent), color-mix(in oklab, var(--violet) 22%, transparent));
+    border: 1px solid var(--border); transition: transform .3s var(--ease); }
+  .card:hover .ico { transform: scale(1.1) rotate(-4deg); }
+  .card h3 { font-size: 16.5px; margin-bottom: 7px; letter-spacing: -0.01em; position: relative; }
+  .card p { font-size: 14px; color: var(--ink2); position: relative; }
+
+  /* smart pause marquee band */
+  .pause-band { border-radius: 28px; border: 1px solid var(--border); overflow: hidden;
+    background:
+      radial-gradient(700px 340px at 0% 0%, color-mix(in oklab, var(--violet) 14%, transparent), transparent 65%),
+      radial-gradient(600px 300px at 100% 100%, color-mix(in oklab, var(--amber) 10%, transparent), transparent 65%),
+      var(--bg1);
+    padding: 56px 0 40px; }
+  .pause-band .sec-head { padding: 0 48px; }
+  .marquee { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+  .marquee + .marquee { margin-top: 12px; }
+  .mtrack { display: flex; gap: 12px; width: max-content; animation: scroll 34s linear infinite; }
+  .marquee.rev .mtrack { animation-direction: reverse; }
+  .marquee:hover .mtrack { animation-play-state: paused; }
+  @keyframes scroll { to { transform: translateX(-50%); } }
+  .signal { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap;
+    border: 1px solid var(--border); background: var(--card); border-radius: 999px;
+    padding: 10px 18px; font-size: 14px; color: var(--ink2); }
+  .signal b { color: var(--ink); font-weight: 600; }
+
+  /* stats */
+  .stats-grid { display: grid; grid-template-columns: 0.92fr 1.08fr; gap: 48px; align-items: center; }
+  .score-card { border-radius: 24px; border: 1px solid var(--border); background: var(--bg1);
+    padding: 32px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+  .score-card::before { content: ""; position: absolute; inset: 0;
+    background: radial-gradient(420px 220px at 85% -10%, color-mix(in oklab, var(--violet) 14%, transparent), transparent 70%); }
+  .score-label { font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink3); }
+  .score-num { font-size: 58px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.05;
+    background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .score-sub { color: var(--ink2); font-size: 13.5px; margin-top: 2px; }
+  .bars { display: flex; gap: 12px; height: 120px; margin-top: 26px; position: relative; }
+  .bar-wrap { flex: 1; display: grid; grid-template-rows: 1fr auto; gap: 9px; }
+  .bar-cell { display: flex; align-items: flex-end; }
+  .bar { width: 100%; height: 0; border-radius: 7px 7px 3px 3px;
+    background: linear-gradient(180deg, var(--rose), color-mix(in oklab, var(--violet) 70%, var(--bg1)));
+    transition: height 1s var(--ease); }
+  .in .bar { height: var(--h); }
+  .bar-wrap:nth-child(2) .bar { transition-delay: .07s } .bar-wrap:nth-child(3) .bar { transition-delay: .14s }
+  .bar-wrap:nth-child(4) .bar { transition-delay: .21s } .bar-wrap:nth-child(5) .bar { transition-delay: .28s }
+  .bar-wrap:nth-child(6) .bar { transition-delay: .35s } .bar-wrap:nth-child(7) .bar { transition-delay: .42s }
+  .bar-wrap span { text-align: center; font-size: 11px; color: var(--ink3); }
+
+  /* get */
+  .get { border-radius: 28px; border: 1px solid var(--border); text-align: center; overflow: hidden; position: relative;
+    background:
+      radial-gradient(720px 380px at 50% 130%, color-mix(in oklab, var(--rose) 16%, transparent), transparent 70%),
+      var(--bg1);
+    padding: 64px 44px; }
+  .get h2 { font-size: clamp(28px, 3.6vw, 42px); letter-spacing: -0.025em; font-weight: 800; }
+  .get p { color: var(--ink2); max-width: 54ch; margin: 16px auto 30px; }
+  .term { max-width: 580px; margin: 0 auto 28px; text-align: left;
+    background: #0c0714; border: 1px solid rgba(255,255,255,.12); border-radius: 14px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13.5px;
+    padding: 20px 22px; color: #e4d7f2; overflow-x: auto; position: relative; }
+  .term::before { content: ""; position: absolute; left: 16px; top: 14px; width: 9px; height: 9px;
+    border-radius: 50%; background: #ff5f57; box-shadow: 16px 0 0 #febc2e, 32px 0 0 #28c840; }
+  .term > div:first-of-type { margin-top: 18px; }
+  .term .dim { color: #6d5f85; }
+  .term .ok { color: var(--amber); }
+  .req { font-size: 13px; color: var(--ink3); margin-top: 14px; }
+
+  /* faq */
+  details { border-bottom: 1px solid var(--border); padding: 22px 4px; }
+  details summary { cursor: pointer; font-weight: 700; font-size: 16.5px; list-style: none;
+    display: flex; justify-content: space-between; align-items: center; gap: 16px; letter-spacing: -0.01em; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::after { content: "+"; font-size: 22px; font-weight: 400; color: var(--ink3);
+    transition: transform .3s var(--ease), color .3s; }
+  details[open] summary::after { transform: rotate(45deg); color: var(--rose); }
+  details p { color: var(--ink2); font-size: 14.5px; margin-top: 12px; max-width: 68ch; }
+  details a { color: var(--amber); }
+
+  footer { padding: 48px 0 64px; color: var(--ink3); font-size: 13px; }
+  .foot { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; align-items: center;
+    border-top: 1px solid var(--border); padding-top: 32px; }
+
+  @media (max-width: 920px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 60px; }
+    .steps, .grid { grid-template-columns: 1fr 1fr; }
+    .stats-grid { grid-template-columns: 1fr; gap: 36px; }
+  }
+  @media (max-width: 600px) {
+    .steps, .grid { grid-template-columns: 1fr; }
+    .nav-links { display: none; }
+    .pause-band .sec-head { padding: 0 26px; }
+    .get { padding: 44px 24px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    html { scroll-behavior: auto; }
+    .reveal, .enter { opacity: 1 !important; transform: none !important; }
+    .demo-headsup, .demo-overlay { opacity: 1; transform: none; }
+    .bar { height: var(--h); }
+  }
+</style>
+</head>
+<body>
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<svg width="0" height="0" aria-hidden="true">
+  <defs>
+    <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffb45c"/><stop offset="55%" stop-color="#ff7d9c"/><stop offset="100%" stop-color="#b78cff"/>
+    </linearGradient>
+    <symbol id="eyes" viewBox="0 0 24 24">
+      <g fill="none" stroke="currentColor" stroke-width="1.8">
+        <ellipse cx="7.5" cy="12" rx="4.2" ry="5.4"/>
+        <ellipse cx="16.5" cy="12" rx="4.2" ry="5.4"/>
+        <circle cx="8.6" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+        <circle cx="17.6" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<nav>
+  <div class="wrap nav-inner">
+    <span class="brand"><svg class="logo"><use href="#eyes"/></svg> Offscreen</span>
+    <div class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#smartpause">Smart Pause</a>
+      <a href="#stats">Stats</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <a class="btn" href="#get" style="margin-left:16px">Get Offscreen <span class="arr">→</span></a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow enter d1"><span class="dot"></span> Native · macOS 26 · Free forever</span>
+      <h1 class="enter d2">Look up.<br>Your eyes will<br><span class="shine">thank you.</span></h1>
+      <p class="lede enter d3">Offscreen lives in your menu bar and schedules smart screen breaks — and it knows when <em>not</em> to interrupt. In a meeting? Mid-game? Deep in flow? It waits, then catches you between moments.</p>
+      <div class="cta-row enter d4">
+        <a class="btn" href="#get">Get Offscreen <span class="arr">→</span></a>
+        <a class="btn ghost" href="#how">Watch a cycle</a>
+      </div>
+      <div class="chips enter d5">
+        <span class="chip">100% local</span>
+        <span class="chip">No account</span>
+        <span class="chip">Zero permission prompts</span>
+        <span class="chip">Open source</span>
+      </div>
+    </div>
+
+    <div class="demo enter d3" id="demo">
+      <div class="screen">
+        <div class="fakewin"><i></i><i></i><i></i><i></i></div>
+        <div class="demo-menubar"><svg class="logo"><use href="#eyes"/></svg> <span id="mb-time">0:03</span></div>
+        <div class="demo-headsup">
+          <div class="top">
+            <span class="clock"></span>
+            <div>
+              <div class="time">00:<span id="hu-time">58</span></div>
+              <div class="sub">Almost time — your eyes have earned this.</div>
+            </div>
+          </div>
+          <div class="row"><span class="b">Start this break now</span><span class="b alt">+1m</span><span class="b alt">+5m</span><span class="b alt">+15m</span></div>
+        </div>
+        <div class="demo-overlay">
+          <div class="inner">
+            <div class="kicker">Short break</div>
+            <div class="prompt" id="ov-prompt">Look at something far away</div>
+            <div class="ring">
+              <svg width="130" height="130" viewBox="0 0 130 130">
+                <circle class="track" cx="65" cy="65" r="58" fill="none" stroke-width="6"/>
+                <circle class="arc" cx="65" cy="65" r="58" fill="none" stroke-width="6"/>
+              </svg>
+              <div class="time" id="ov-time">0:06</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-caption">
+        <span data-phase="work">1 · Focus</span>
+        <span data-phase="notice">2 · Heads-up</span>
+        <span data-phase="break">3 · Break</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>A rhythm, <em>not a nag</em></h2>
+      <p>Every twenty minutes of screen time, your eye muscles deserve twenty seconds of distance. Offscreen turns that into a rhythm you never have to think about.</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal"><span class="n"></span><h3>Focus</h3><p>The menu bar quietly counts down your work interval. Pick a preset — Balanced, Deep Focus, the classic 20-20-20 — or tune every number yourself.</p></div>
+      <div class="step reveal"><span class="n"></span><h3>Heads-up</h3><p>A minute before each break, a small panel slides in without stealing your keyboard. Start early, or snooze +1, +5, +15 minutes — within your snooze budget.</p></div>
+      <div class="step reveal"><span class="n"></span><h3>Break</h3><p>Every display softens into a countdown and a gentle prompt. Twenty seconds later you're back — eyes rested, shoulders down, posture reset.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>Small app. <em>Full attention</em> to detail.</h2>
+      <p>Everything you'd expect from a paid break reminder — built native, fast, and yours.</p>
+    </div>
+    <div class="grid">
+      <div class="card reveal"><div class="glow"></div><div class="ico">⏱️</div><h3>Presets that fit your day</h3><p>Balanced 20 min / 20 s, Deep Focus 45 / 30 with long recovery breaks, the 20-20-20 rule — or fully custom timing.</p></div>
+      <div class="card reveal"><div class="glow"></div><div class="ico">🎚️</div><h3>Pick your discipline</h3><p>Casual lets you skip freely. Balanced makes you wait a few seconds. Hardcore doesn't negotiate.</p></div>
+      <div class="card reveal"><div class="glow"></div><div class="ico">🖱️</div><h3>Cursor countdown</h3><p>In the final seconds, a tiny pill follows your pointer — a break never catches you mid-thought.</p></div>
+      <div class="card reveal"><div class="glow"></div><div class="ico">🥪</div><h3>Planned breaks</h3><p>Lunch at 12:30, a walk at 4 — named breaks at fixed times, with the same gentle heads-up flow.</p></div>
+      <div class="card reveal"><div class="glow"></div><div class="ico">🌙</div><h3>Office hours</h3><p>Reminders only when you're actually working. Evenings and weekends stay yours.</p></div>
+      <div class="card reveal"><div class="glow"></div><div class="ico">📊</div><h3>Screen Score</h3><p>Daily score, active screen time, breaks kept vs. skipped, and per-app usage — in a local SQLite file, never the cloud.</p></div>
+      <div class="card reveal"><div class="glow"></div><div class="ico">🎨</div><h3>Make it yours</h3><p>Gradient, blur, or your own photo behind breaks. Your own messages. Optional chimes or ambient audio.</p></div>
+      <div class="card reveal"><div class="glow"></div><div class="ico">⌨️</div><h3>Keyboard first</h3><p>⌥⇧B starts a break anywhere. ⌥⇧P pauses everything. Launch at login and forget it's there.</p></div>
+      <div class="card reveal"><div class="glow"></div><div class="ico">🖥️</div><h3>Every display</h3><p>Breaks cover all your monitors at once — even over fullscreen apps — without yanking you out of your Space.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="smartpause">
+  <div class="wrap">
+    <div class="pause-band reveal">
+      <div class="sec-head">
+        <h2>It knows when to <em>stay quiet</em></h2>
+        <p>Smart Pause reads harmless system signals — never your screen, never your keystrokes — and holds breaks the moment life is happening. The break fires the second you're free.</p>
+      </div>
+      <div class="marquee"><div class="mtrack" id="mt1">
+        <span class="signal">📷 <b>Camera on</b> · in a meeting</span>
+        <span class="signal">🎙️ <b>Mic live</b> · on a call</span>
+        <span class="signal">▶️ <b>Media playing</b> · movie night</span>
+        <span class="signal">🖥️ <b>Screen shared</b> · presenting</span>
+      </div></div>
+      <div class="marquee rev"><div class="mtrack" id="mt2">
+        <span class="signal">🎮 <b>Fullscreen game</b> · clutch round</span>
+        <span class="signal">🧘 <b>Focus apps</b> · you choose them</span>
+        <span class="signal">⌨️ <b>Mid-keystroke</b> · finish the thought</span>
+        <span class="signal">💤 <b>Away from Mac</b> · counts as a break</span>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<section id="stats">
+  <div class="wrap stats-grid">
+    <div class="score-card reveal" id="scorecard">
+      <div class="score-label">Screen Score</div>
+      <div class="score-num" id="score">0</div>
+      <div class="score-sub">great habits — 14 breaks kept, 1 skipped</div>
+      <div class="bars" role="img" aria-label="Active screen hours for the last seven days">
+        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:52%"></div></div><span>Mon</span></div>
+        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:74%"></div></div><span>Tue</span></div>
+        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:64%"></div></div><span>Wed</span></div>
+        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:88%"></div></div><span>Thu</span></div>
+        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:70%"></div></div><span>Fri</span></div>
+        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:28%"></div></div><span>Sat</span></div>
+        <div class="bar-wrap"><div class="bar-cell"><div class="bar" style="--h:18%"></div></div><span>Sun</span></div>
+      </div>
+    </div>
+    <div class="sec-head reveal" style="margin-bottom:0">
+      <h2>Know your screen, <em>keep your privacy</em></h2>
+      <p>Offscreen tracks the things worth knowing — how long you've been on screen, which apps eat your day, whether you're actually taking breaks — and distills it into one daily Screen Score.</p>
+      <p style="margin-top:12px">Nothing leaves your Mac. There's no account, no telemetry, and — unusually — <strong>no permission prompts at all</strong>: no Accessibility, no Screen Recording, no camera or microphone access. Ever.</p>
+    </div>
+  </div>
+</section>
+
+<section id="get">
+  <div class="wrap">
+    <div class="get reveal">
+      <h2>Free. Local. <em>Yours.</em></h2>
+      <p>Offscreen is a personal open-source project — no license keys, no subscriptions. Install it with Homebrew, or download the latest release.</p>
+      <div class="term">
+        <div><span class="dim"># install with Homebrew</span></div>
+        <div><span class="dim">$</span> brew install --cask dayaki/offscreen/offscreen</div>
+        <div class="ok">✓ Offscreen.app in /Applications</div>
+      </div>
+      <div class="cta-row" style="justify-content:center;margin-top:26px">
+        <a class="btn" href="https://github.com/dayaki/offscreen/releases/latest">Download the latest release <span class="arr">→</span></a>
+        <a class="btn ghost" href="https://github.com/dayaki/offscreen">View source on GitHub</a>
+      </div>
+      <div class="req">Requires macOS 26 · Apple silicon · signed &amp; notarized · or build from source</div>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="sec-head reveal"><h2>Questions, <em>answered</em></h2></div>
+    <details class="reveal" open>
+      <summary>Why do I need screen breaks at all?</summary>
+      <p>Staring at a fixed distance keeps the focusing muscles in your eyes contracted for hours, which drives digital eye strain — dryness, blur, headaches. Optometrists suggest the 20-20-20 habit: every 20 minutes, look at something about 20 feet away for 20 seconds. Offscreen exists to make that habit automatic.</p>
+    </details>
+    <details class="reveal">
+      <summary>Will it interrupt my meetings or games?</summary>
+      <p>No. Smart Pause holds breaks while your camera or mic is in use, media is playing, your screen is shared, or a fullscreen app is up — and you can add your own "never interrupt" apps. Due breaks fire as soon as you're free.</p>
+    </details>
+    <details class="reveal">
+      <summary>What permissions does it ask for?</summary>
+      <p>None. Every detector is built on permission-free system APIs, so macOS never shows a privacy prompt for Offscreen. It can't see your screen contents or read your keys — by design and by architecture.</p>
+    </details>
+    <details class="reveal">
+      <summary>Where does my data live?</summary>
+      <p>In <code>~/Library/Application Support/Offscreen/</code> — a human-readable settings JSON and a SQLite stats file you can open yourself. Nothing is sent anywhere.</p>
+    </details>
+    <details class="reveal">
+      <summary>Is this Lookaway?</summary>
+      <p>No — Offscreen is an independent, personal open-source project inspired by <a href="https://lookaway.com">Lookaway</a>, which deserves the credit for pioneering this thoughtful approach to screen breaks. If you want a polished commercial app with support and an iPhone companion, go buy it. Offscreen is not affiliated with or endorsed by its makers.</p>
+    </details>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot">
+    <span class="brand" style="font-size:14px"><svg class="logo" style="width:18px;height:18px"><use href="#eyes"/></svg> Offscreen</span>
+    <span>Built with Swift &amp; SwiftUI · © <span id="year">2026</span> · Take a break, seriously.</span>
+  </div>
+</footer>
+
+<script>
+  document.getElementById("year").textContent = new Date().getFullYear();
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // duplicate marquee tracks for a seamless loop
+  for (const id of ["mt1", "mt2"]) {
+    const track = document.getElementById(id);
+    track.innerHTML += track.innerHTML;
+  }
+
+  // ---- hero demo: loop the whole break cycle ----
+  const demo = document.getElementById("demo");
+  const mbTime = document.getElementById("mb-time");
+  const huTime = document.getElementById("hu-time");
+  const ovTime = document.getElementById("ov-time");
+  const captions = document.querySelectorAll(".demo-caption span");
+  const prompts = ["Look at something far away", "Unclench your jaw", "Blink slowly a few times", "Gaze out the window"];
+  let cycle = 0;
+
+  function setPhase(phase) {
+    demo.classList.remove("work", "notice", "break");
+    demo.classList.add(phase);
+    captions.forEach((c) => c.classList.toggle("on", c.dataset.phase === phase));
+  }
+
+  function runDemo() {
+    // phase 1 — focus: menu bar ticks down 0:03 → 0:01
+    setPhase("work");
+    document.getElementById("ov-prompt").textContent = prompts[cycle++ % prompts.length];
+    let t = 3;
+    mbTime.textContent = "0:0" + t;
+    const tick = setInterval(() => {
+      t -= 1;
+      if (t > 0) mbTime.textContent = "0:0" + t;
+      else clearInterval(tick);
+    }, 1000);
+
+    // phase 2 — heads-up panel slides in, its countdown breathes
+    setTimeout(() => {
+      setPhase("notice");
+      mbTime.textContent = "0:58";
+      let h = 58;
+      const htick = setInterval(() => {
+        h -= 1;
+        huTime.textContent = String(h).padStart(2, "0");
+        if (h <= 55) clearInterval(htick);
+      }, 1000);
+    }, 3200);
+
+    // phase 3 — the break overlay, ring drains 6 s
+    setTimeout(() => {
+      setPhase("break");
+      // restart the ring drain animation
+      const arc = demo.querySelector(".arc");
+      arc.style.animation = "none";
+      void arc.offsetWidth;
+      arc.style.animation = "";
+      let b = 6;
+      ovTime.textContent = "0:06";
+      const btick = setInterval(() => {
+        b -= 1;
+        ovTime.textContent = "0:0" + Math.max(0, b);
+        if (b <= 0) clearInterval(btick);
+      }, 1000);
+    }, 7200);
+
+    // reset
+    setTimeout(() => setPhase("work"), 14200);
+  }
+
+  if (!reduced) {
+    runDemo();
+    setInterval(runDemo, 15600);
+  } else {
+    setPhase("break");
+  }
+
+  // ---- reveals with stagger ----
+  const io = new IntersectionObserver(
+    (entries) =>
+      entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        e.target.classList.add("in");
+        io.unobserve(e.target);
+      }),
+    { threshold: 0.14 }
+  );
+  document.querySelectorAll(".reveal").forEach((el, i) => {
+    el.style.transitionDelay = (i % 3) * 0.09 + "s";
+    io.observe(el);
+  });
+
+  // ---- score count-up ----
+  const score = document.getElementById("score");
+  const so = new IntersectionObserver((entries) => {
+    if (!entries[0].isIntersecting) return;
+    so.disconnect();
+    if (reduced) { score.textContent = "92"; return; }
+    const t0 = performance.now();
+    const dur = 1400;
+    (function step(now) {
+      const p = Math.min(1, (now - t0) / dur);
+      score.textContent = Math.round(92 * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) requestAnimationFrame(step);
+    })(t0);
+  }, { threshold: 0.4 });
+  so.observe(document.getElementById("scorecard"));
+</script>
+</body>
+</html>

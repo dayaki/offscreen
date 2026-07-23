@@ -1,0 +1,16 @@
+# SwiftPM / Xcode build products
+.build/
+build/
+dist/
+DerivedData/
+*.xcodeproj
+
+# Release artifacts
+*.zip
+*.dmg
+
+# macOS
+.DS_Store
+
+# Claude Code local settings
+.claude/
