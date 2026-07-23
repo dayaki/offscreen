@@ -36,13 +36,17 @@ cat > "$TMP/app.html" <<HTML
 HTML
 shot "$TMP/app.html" "$TMP/appicon.png" 1024
 
-# Menu bar — black eye-closed glyph on transparent (template image).
+# Menu bar — dark eye-closed glyph inside a white circle badge, on transparent.
+# This is a FULL-COLOR image (not a template), so it must be loaded with
+# isTemplate = false; the white badge makes it pop on a dark menu bar.
 cat > "$TMP/menu.html" <<HTML
 <!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="$CSS">
 <style>html,body{margin:0;width:256px;height:256px;background:transparent;
  display:flex;align-items:center;justify-content:center}
-i{font-size:196px;color:#000;line-height:1}</style></head>
-<body><i class="ph-fill ph-eye-closed"></i></body></html>
+.badge{width:248px;height:248px;border-radius:50%;background:#fff;
+ display:flex;align-items:center;justify-content:center}
+.badge i{font-size:150px;color:#0a0a0c;line-height:1}</style></head>
+<body><div class="badge"><i class="ph-fill ph-eye-closed"></i></div></body></html>
 HTML
 shot "$TMP/menu.html" "$TMP/menubar.png" 256
 sips -z 36 36 "$TMP/menubar.png" --out Resources/MenuBarIcon.png >/dev/null

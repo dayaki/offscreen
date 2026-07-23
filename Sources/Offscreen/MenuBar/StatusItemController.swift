@@ -31,13 +31,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         updateTitle()
     }
 
-    /// The Offscreen "eye-closed" mark as a menu bar template image (tints itself
-    /// for light/dark menu bars). Falls back to an SF Symbol if the asset is missing.
+    /// The Offscreen mark for the menu bar: the eye-closed glyph inside a white
+    /// circle badge so it stands out. It's a full-color image (white + dark), so
+    /// isTemplate is false — otherwise macOS would flatten it to a single tint.
+    /// Falls back to an SF Symbol if the asset is missing.
     private static func menuBarIcon() -> NSImage {
         if let url = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png"),
            let image = NSImage(contentsOf: url) {
             image.size = NSSize(width: 18, height: 18)
-            image.isTemplate = true
+            image.isTemplate = false
             return image
         }
         return NSImage(systemSymbolName: "eye", accessibilityDescription: "Offscreen") ?? NSImage()
