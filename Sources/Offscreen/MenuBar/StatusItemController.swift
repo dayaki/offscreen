@@ -54,6 +54,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         case .inactive(.outsideOfficeHours): title = ""
         case .inBreak: title = " \(Format.clock(engine.breakRemaining))"
         case .holding: title = " ⏳"
+        case _ where engine.isPausedByHold:
+            title = " ⏳" // busy (meeting, media, screen share…) — countdown frozen
         default:
             title = settingsStore.settings.showCountdownInMenuBar
                 ? " \(Format.clock(max(0, engine.timeUntilBreak)))"
@@ -130,6 +132,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         case .holding:
             let reasons = engine.holdReasons.map(\.label).joined(separator: ", ")
             return "Break held: \(reasons)"
+        case _ where engine.isPausedByHold:
+            let reasons = engine.holdReasons.map(\.label).joined(separator: ", ")
+            return "Paused — \(reasons)"
         default:
             return "\(engine.nextBreakKind.title) in \(Format.clock(max(0, engine.timeUntilBreak)))"
         }

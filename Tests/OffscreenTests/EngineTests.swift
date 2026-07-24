@@ -74,28 +74,36 @@ import Foundation
         #expect(engine.workAccrued == 0)
     }
 
-    @Test func holdDefersBreak() {
-        let engine = makeEngine()
-        engine.setHold(.camera, active: true)
-        engine.advance(by: 101)
-        #expect(engine.phase == .holding)
+    @Test func holdPausesCountdown() {
+        let engine = makeEngine() // work 100, lead 20
+        engine.advance(by: 50)
+        let atHold = engine.timeUntilBreak
 
-        engine.advance(by: 60)
-        #expect(engine.phase == .holding) // still held
+        // A meeting (mic in use) starts — the countdown must freeze, like idle.
+        engine.setHold(.microphone, active: true)
+        engine.advance(by: 500) // long call
+        #expect(engine.phase == .working)
+        #expect(engine.isPausedByHold)
+        #expect(abs(engine.timeUntilBreak - atHold) < 1e-6) // the clock didn't move
 
-        engine.setHold(.camera, active: false)
-        engine.advance(by: 1)
+        // Meeting ends — the countdown resumes from where it left off.
+        engine.setHold(.microphone, active: false)
+        #expect(!engine.isPausedByHold)
+        engine.advance(by: 30) // 80 accrued → inside the lead window
+        #expect(engine.phase == .preBreak)
+        engine.advance(by: 20)
         #expect(engine.phase == .inBreak)
     }
 
     @Test func holdSuppressesPreBreakPanel() {
         let engine = makeEngine() // work 100, lead 20
+        engine.advance(by: 75) // 25s to go — just outside the lead window
         engine.setHold(.microphone, active: true)
-        engine.advance(by: 85) // inside the lead window, but held
+        engine.advance(by: 100) // held — frozen before the lead window is reached
         #expect(engine.phase == .working) // no heads-up panel while held
 
         engine.setHold(.microphone, active: false)
-        engine.advance(by: 1)
+        engine.advance(by: 10) // resumes → 85 accrued, inside the lead window
         #expect(engine.phase == .preBreak) // panel appears once the hold clears
     }
 

@@ -54,6 +54,21 @@ final class BreakEngine {
         return breakElapsed >= Double(minimum)
     }
 
+    /// Holds that mean you're genuinely busy or away — a meeting (camera or
+    /// mic), media, a shared screen, a fullscreen app, or a focus app. Like
+    /// idle, these pause the work countdown: a break never lands mid-meeting
+    /// and never fires the instant you're free. `.typing`/`.snoozed` are
+    /// break-timing mechanics, not "busy", so they don't freeze the clock.
+    private var isBusyHeld: Bool {
+        holdReasons.contains { $0 != .typing && $0 != .snoozed }
+    }
+
+    /// The countdown is frozen because a busy hold is active while you'd
+    /// otherwise be working toward a break. Drives the menu bar's paused state.
+    var isPausedByHold: Bool {
+        (phase == .working || phase == .preBreak) && isBusyHeld
+    }
+
     // MARK: Internals
 
     let clock: EngineClock
@@ -117,7 +132,7 @@ final class BreakEngine {
             }
 
         case .working:
-            workAccrued += delta
+            if !isBusyHeld { workAccrued += delta } // a meeting/media/etc. pauses the clock
             if timeUntilBreak <= 0 {
                 tryStartBreak()
             } else if timeUntilBreak <= Double(timing.leadTimeSeconds), holdReasons.isEmpty {
@@ -128,7 +143,7 @@ final class BreakEngine {
             }
 
         case .preBreak:
-            workAccrued += delta
+            if !isBusyHeld { workAccrued += delta }
             if !holdReasons.isEmpty {
                 // A hold began during the heads-up (e.g. joined a huddle) —
                 // pull the panel back down and wait it out.
