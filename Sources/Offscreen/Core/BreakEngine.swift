@@ -54,13 +54,24 @@ final class BreakEngine {
         return breakElapsed >= Double(minimum)
     }
 
-    /// Holds that mean you're genuinely busy or away — a meeting (camera or
-    /// mic), media, a shared screen, a fullscreen app, or a focus app. Like
-    /// idle, these pause the work countdown: a break never lands mid-meeting
-    /// and never fires the instant you're free. `.typing`/`.snoozed` are
-    /// break-timing mechanics, not "busy", so they don't freeze the clock.
+    /// Holds reliable enough to mean "you're genuinely busy" — a meeting
+    /// (camera or mic), a shared screen, a fullscreen app, or a focus app.
+    /// Like idle, these pause the work countdown so a break never lands
+    /// mid-meeting or fires the instant you're free.
+    ///
+    /// `.mediaPlayback` is deliberately excluded: it's inferred from a process
+    /// holding an audio *output* stream, which browsers keep "warm" long after
+    /// playback stops — so it would otherwise leave the timer stuck as
+    /// "Paused — Media playing." Media still defers the break at fire-time; it
+    /// just doesn't freeze the clock. `.typing`/`.snoozed` are break-timing
+    /// mechanics, not "busy," so they don't freeze it either.
     private var isBusyHeld: Bool {
-        holdReasons.contains { $0 != .typing && $0 != .snoozed }
+        holdReasons.contains { reason in
+            switch reason {
+            case .camera, .microphone, .screenShared, .fullscreenApp, .focusApp: true
+            case .mediaPlayback, .typing, .snoozed: false
+            }
+        }
     }
 
     /// The countdown is frozen because a busy hold is active while you'd

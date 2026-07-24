@@ -95,6 +95,16 @@ import Foundation
         #expect(engine.phase == .inBreak)
     }
 
+    @Test func mediaPlaybackDoesNotFreezeCountdown() {
+        // Audio output is unreliable (browsers keep output streams warm), so a
+        // media hold must NOT freeze the clock — otherwise it sticks as paused.
+        let engine = makeEngine() // work 100
+        engine.setHold(.mediaPlayback, active: true)
+        engine.advance(by: 40)
+        #expect(!engine.isPausedByHold)                  // media alone never pauses
+        #expect(abs(engine.timeUntilBreak - 60) < 1e-6)  // the countdown kept moving
+    }
+
     @Test func holdSuppressesPreBreakPanel() {
         let engine = makeEngine() // work 100, lead 20
         engine.advance(by: 75) // 25s to go — just outside the lead window
