@@ -21,12 +21,13 @@ and free.
   seconds in), Hardcore (no skipping). Optional end-early after a minimum, and
   optional auto-lock when a break starts.
 - **Smart Pause** — breaks hold automatically while your camera or mic is in
-  use (meetings), media is playing, the screen is shared or recorded, a
-  fullscreen app is frontmost, or a designated deep-focus app is active. A due
-  break also waits for a typing lull. Idle time and sleep/lock pause the
-  timer, and a long absence counts as a break taken. Background music from a
-  dedicated player (Spotify, Apple Music) is exempt by default — it won't hold
-  a break, while meetings still do (they use the microphone).
+  use (meetings), the screen is shared or recorded, a fullscreen app is
+  frontmost, or a designated deep-focus app is active. A due break also waits
+  for a typing lull. Idle time and sleep/lock pause the timer, and a long
+  absence counts as a break taken. Audio playback isn't used as a pause
+  signal — browsers keep audio-output streams open even when nothing's
+  playing, so it's unreliable; fullscreen video and calls are already caught
+  by the signals above.
 - **Scheduling** — Office Hours (only remind during chosen hours/days) and
   Planned Breaks (named breaks at fixed times, e.g. lunch) that reuse the same
   heads-up flow.

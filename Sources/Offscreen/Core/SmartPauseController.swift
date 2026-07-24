@@ -61,20 +61,14 @@ final class SmartPauseController {
         applyAudio(lastAudio) // re-evaluate mic/media with the new music setting
     }
 
-    /// Maps an audio reading to holds. A meeting is the microphone; music
-    /// players are exempt from the media hold unless the user opts back in, so
-    /// background music doesn't defer breaks while working.
+    /// Maps an audio reading to holds. Only the microphone (a meeting) pauses
+    /// breaks. Audio *output* — media or music — is intentionally ignored:
+    /// browsers keep output streams "warm" long after playback stops, so it's
+    /// far too unreliable to gate breaks on. Videos are caught by the
+    /// fullscreen monitor; calls by the microphone here.
     private func applyAudio(_ state: ProcessAudioMonitor.State) {
         lastAudio = state
         set(.microphone, state.micInUse)
-        set(.mediaPlayback, Self.shouldHoldForMedia(state, config: config))
-    }
-
-    /// Pure audio→media-hold decision (unit-tested). A dedicated music player
-    /// alone never holds when `ignoreMusicPlayers` is set; the mic (meetings)
-    /// is handled separately.
-    static func shouldHoldForMedia(_ state: ProcessAudioMonitor.State, config: SmartPauseConfig) -> Bool {
-        state.mediaPlaying || (state.musicPlaying && !config.ignoreMusicPlayers)
     }
 
     private func set(_ reason: HoldReason, _ active: Bool) {

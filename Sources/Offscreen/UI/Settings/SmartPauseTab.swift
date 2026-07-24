@@ -10,16 +10,6 @@ struct SmartPauseTab: View {
             Section {
                 Toggle("Meetings and calls (camera on)", isOn: store.binding(\.smartPause.pauseOnCamera))
                 Toggle("Meetings and calls (microphone in use)", isOn: store.binding(\.smartPause.pauseOnMic))
-                Toggle("Video or audio playback", isOn: store.binding(\.smartPause.pauseOnMedia))
-                if store.settings.smartPause.pauseOnMedia {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Toggle("Keep going for music players", isOn: store.binding(\.smartPause.ignoreMusicPlayers))
-                        Text("Spotify, Apple Music, and iTunes won't hold breaks. Meetings still pause (they use the microphone).")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.leading, 18)
-                }
                 Toggle("Screen sharing or recording", isOn: store.binding(\.smartPause.pauseOnScreenShare))
                 Toggle("Fullscreen apps and games", isOn: store.binding(\.smartPause.pauseOnFullscreen))
             } header: {
